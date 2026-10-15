@@ -21,6 +21,12 @@ import { NotFoundError, UserError, idSchema, runAction } from "@/server/action";
 import { audit, diff, logActivity } from "@/server/audit";
 import { getSettings } from "@/server/settings";
 import {
+  kickXeroSync,
+  queueCreditNoteSync,
+  queueInvoiceSync,
+  queueInvoiceVoid,
+} from "@/server/xero/queue";
+import {
   bankDetailsLines,
   recalcInvoice,
   writeInvoiceLines,
@@ -123,7 +129,9 @@ export async function updateInvoice(id: string, input: z.input<typeof invoiceSch
         await tx.invoice.update({ where: { id }, data });
         const totals = await writeInvoiceLines(tx, id, d.lines, settings.gstRegistered);
         await tx.invoice.update({ where: { id }, data: totals });
-        await recalcInvoice(tx, id);
+        const updated = await recalcInvoice(tx, id);
+        // Already sent (or pushed): keep Xero in step with the edit.
+        if (updated.status !== "DRAFT" || before.xeroInvoiceId) await queueInvoiceSync(tx, before);
         await audit(tx, {
           userId: user.id,
           action: "UPDATE",
@@ -135,6 +143,7 @@ export async function updateInvoice(id: string, input: z.input<typeof invoiceSch
           ),
         });
       });
+      kickXeroSync();
       revalidateInvoice(id, before.jobId, before.clientId);
       return { id };
     },
@@ -326,7 +335,10 @@ export async function sendInvoice(input: { id: string }) {
           userId: user.id,
         });
         await audit(tx, { userId: user.id, action: "SEND", entityType: "INVOICE", entityId: id });
+        // Re-sending an invoice that's already in Xero doesn't need another push.
+        if (!invoice.xeroInvoiceId) await queueInvoiceSync(tx, invoice);
       });
+      kickXeroSync();
       revalidateInvoice(id, invoice.jobId, invoice.clientId);
       return { link, skipped: !!result.skipped };
     },
@@ -358,7 +370,9 @@ export async function markInvoiceSent(input: { id: string }) {
           entityId: id,
           changes: { status: { from: "DRAFT", to: "SENT" } },
         });
+        await queueInvoiceSync(tx, invoice);
       });
+      kickXeroSync();
       revalidateInvoice(id, invoice.jobId, invoice.clientId);
       return { id };
     },
@@ -395,7 +409,9 @@ export async function voidInvoice(input: z.input<typeof voidInvoiceSchema>) {
           entityId: id,
           changes: { reason },
         });
+        await queueInvoiceVoid(tx, invoice);
       });
+      kickXeroSync();
       revalidateInvoice(id, invoice.jobId, invoice.clientId);
       return { id };
     },
@@ -454,8 +470,10 @@ export async function createCreditNote(input: z.input<typeof creditNoteSchema>) 
           entityId: created.id,
           changes: { number, invoiceId, amount, reason },
         });
+        await queueCreditNoteSync(tx, created, invoice);
         return created;
       });
+      kickXeroSync();
       revalidateInvoice(invoiceId, invoice.jobId, invoice.clientId);
       return { id: note.id, number: note.number };
     },

@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { clientSchema, contactSchema, propertySchema } from "@/lib/validations/clients";
 import { NotFoundError, UserError, idSchema, runAction } from "@/server/action";
 import { audit, diff, logActivity } from "@/server/audit";
+import { kickXeroSync, queueContactUpdate } from "@/server/xero/queue";
 
 function clientData(d: z.output<typeof clientSchema>) {
   return {
@@ -79,7 +80,7 @@ export async function updateClient(id: string, input: z.input<typeof clientSchem
       if (!before) throw new NotFoundError("Client");
       const data = clientData(d);
       await db.$transaction(async (tx) => {
-        await tx.client.update({ where: { id }, data });
+        const updated = await tx.client.update({ where: { id }, data });
         await audit(tx, {
           userId: user.id,
           action: "UPDATE",
@@ -87,7 +88,9 @@ export async function updateClient(id: string, input: z.input<typeof clientSchem
           entityId: id,
           changes: diff(before, data),
         });
+        await queueContactUpdate(tx, updated);
       });
+      kickXeroSync();
       revalidatePath(`/clients/${id}`);
       revalidatePath("/clients");
       return { id };

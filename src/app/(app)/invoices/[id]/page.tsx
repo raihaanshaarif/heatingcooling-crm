@@ -26,13 +26,19 @@ import { InvoiceStatusBadge } from "@/components/shared/status-badge";
 import { NoteForm, Timeline } from "@/components/shared/timeline";
 import { InvoiceActions } from "@/components/invoices/invoice-actions";
 import { DeletePaymentButton } from "@/components/invoices/delete-payment-button";
+import { InvoiceXeroPanel } from "@/components/xero/invoice-xero-panel";
+import { getInvoiceXeroState } from "@/server/xero/queries";
 
 export const metadata: Metadata = { title: "Invoice" };
 
 export default async function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requirePermission("view", "invoices");
   const { id } = await params;
-  const [invoice, settings] = await Promise.all([getInvoice(id), getSettings()]);
+  const [invoice, settings, xero] = await Promise.all([
+    getInvoice(id),
+    getSettings(),
+    can(user, "view", "xero") ? getInvoiceXeroState(id) : null,
+  ]);
   if (!invoice) notFound();
   const showCosts = can(user, "view", "priceBookCosts");
   const cost = invoice.lineItems.reduce((s, l) => s + Math.round(l.quantity * l.unitCostCents), 0);
@@ -184,6 +190,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
                           {formatDate(p.paidAt)}
                           {p.reference && ` · Ref ${p.reference}`}
                           {p.recordedBy && ` · by ${p.recordedBy.name}`}
+                          {xero && <XeroMark status={p.xeroSyncStatus} />}
                         </p>
                       </div>
                       <div className="flex items-center gap-1">
@@ -198,6 +205,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
                         <p className="font-medium">Credit note {c.number}</p>
                         <p className="text-muted-foreground text-xs">
                           {formatDate(c.issuedAt)} · {c.reason}
+                          {xero && <XeroMark status={c.xeroSyncStatus} />}
                         </p>
                       </div>
                       <span className="tabular-nums">{formatCents(-c.amountCents)}</span>
@@ -219,42 +227,63 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
             </CardContent>
           </Card>
         </div>
-        <Card className="h-fit">
-          <CardHeader>
-            <CardTitle>Summary</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <DetailList
-              items={[
-                {
-                  label: "Client",
-                  value: (
-                    <Link className="hover:underline" href={`/clients/${invoice.clientId}`}>
-                      {invoice.client.name}
-                    </Link>
-                  ),
-                },
-                { label: "Email", value: invoice.client.email },
-                { label: "Site", value: invoice.property ? formatAddress(invoice.property) : null },
-                {
-                  label: "Job",
-                  value: invoice.job && (
-                    <Link className="hover:underline" href={`/jobs/${invoice.job.id}`}>
-                      {invoice.job.number}
-                    </Link>
-                  ),
-                },
-                { label: "Issued", value: formatDate(invoice.issueDate) },
-                { label: "Terms", value: PAYMENT_TERMS_LABELS[invoice.paymentTerms] },
-                { label: "Due", value: formatDate(invoice.dueDate) },
-                { label: "Sent", value: invoice.sentAt ? formatDateTime(invoice.sentAt) : null },
-                { label: "Paid", value: invoice.paidAt ? formatDate(invoice.paidAt) : null },
-                { label: "Voided", value: invoice.voidedAt ? formatDate(invoice.voidedAt) : null },
-              ]}
+        <div className="space-y-4">
+          <Card className="h-fit">
+            <CardHeader>
+              <CardTitle>Summary</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DetailList
+                items={[
+                  {
+                    label: "Client",
+                    value: (
+                      <Link className="hover:underline" href={`/clients/${invoice.clientId}`}>
+                        {invoice.client.name}
+                      </Link>
+                    ),
+                  },
+                  { label: "Email", value: invoice.client.email },
+                  {
+                    label: "Site",
+                    value: invoice.property ? formatAddress(invoice.property) : null,
+                  },
+                  {
+                    label: "Job",
+                    value: invoice.job && (
+                      <Link className="hover:underline" href={`/jobs/${invoice.job.id}`}>
+                        {invoice.job.number}
+                      </Link>
+                    ),
+                  },
+                  { label: "Issued", value: formatDate(invoice.issueDate) },
+                  { label: "Terms", value: PAYMENT_TERMS_LABELS[invoice.paymentTerms] },
+                  { label: "Due", value: formatDate(invoice.dueDate) },
+                  { label: "Sent", value: invoice.sentAt ? formatDateTime(invoice.sentAt) : null },
+                  { label: "Paid", value: invoice.paidAt ? formatDate(invoice.paidAt) : null },
+                  {
+                    label: "Voided",
+                    value: invoice.voidedAt ? formatDate(invoice.voidedAt) : null,
+                  },
+                ]}
+              />
+            </CardContent>
+          </Card>
+          {xero && (
+            <InvoiceXeroPanel
+              state={xero}
+              invoiceStatus={invoice.status}
+              canRetry={can(user, "update", "xero")}
             />
-          </CardContent>
-        </Card>
+          )}
+        </div>
       </div>
     </>
   );
+}
+
+function XeroMark({ status }: { status: "PENDING" | "SYNCED" | "FAILED" | null }) {
+  if (!status) return null;
+  const text = { PENDING: "Xero: waiting", SYNCED: "In Xero", FAILED: "Xero: failed" }[status];
+  return <span className={status === "FAILED" ? "text-destructive" : undefined}> · {text}</span>;
 }

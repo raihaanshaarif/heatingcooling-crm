@@ -26,6 +26,7 @@ export type Resource =
   | "auditLog"
   | "notifications"
   | "sms"
+  | "xero"
   | "prices";
 
 export interface PermissionUser {
@@ -69,6 +70,7 @@ export const PERMISSIONS: Matrix = {
     auditLog: ALL,
     notifications: ALL,
     sms: ALL,
+    xero: ALL,
     prices: ALL,
   },
   OFFICE: {
@@ -90,6 +92,7 @@ export const PERMISSIONS: Matrix = {
     team: READ,
     notifications: ALL,
     sms: ["view", "create"], // send one-off texts and see them on timelines; SMS settings/log are admin
+    xero: ["view", "update"], // see an invoice's Xero sync status and click Retry; connect/settings are admin
     prices: READ,
   },
   TECHNICIAN: {

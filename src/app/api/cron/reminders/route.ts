@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { runDailyReminders } from "@/server/cron/reminders";
+import { runXeroCron } from "@/server/xero/sync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,12 +20,21 @@ function authorised(req: Request) {
  * Daily reminders. A Coolify scheduled task (`pnpm cron:reminders`) calls this
  * with `Authorization: Bearer $CRON_SECRET`.
  * Safe to run more than once a day: every reminder is de-duplicated.
+ * Then pushes waiting Xero sync jobs (when connected with automatic sync on) and refreshes
+ * the Xero connection so it never lapses.
  */
 export async function GET(req: Request) {
   if (!authorised(req)) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   const summary = await runDailyReminders();
   console.info("[cron] reminders", summary);
-  return NextResponse.json({ ok: true, ...summary });
+  let xero: unknown;
+  try {
+    xero = await runXeroCron();
+  } catch (error) {
+    console.error("[cron] xero sync failed", error);
+    xero = { error: error instanceof Error ? error.message : String(error) };
+  }
+  return NextResponse.json({ ok: true, ...summary, xero });
 }
 
 export const POST = GET;

@@ -2,11 +2,9 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 
 /**
- * Accounting exports. Phase 1 ships a Xero-compatible sales invoice CSV (Xero →
- * Business → Invoices → Import). Phase 3 replaces this with API sync.
- *
- * TODO(Phase 3): Xero OAuth2 + Accounting API (POST /Invoices, /Payments) and MYOB
- * AccountRight API; store tokens per business; map price book items to account codes.
+ * Accounting export: a Xero-compatible sales invoice CSV (Xero → Business → Invoices →
+ * Import), also the route for MYOB. Live one-way sync to Xero over the Accounting API
+ * lives in src/lib/xero (pure payloads, OAuth, client) and src/server/xero (queue, sync).
  */
 type InvoiceForExport = Prisma.InvoiceGetPayload<{ include: { client: true; lineItems: true } }>;
 
@@ -65,7 +63,7 @@ export function invoicesToXeroCsv(invoices: InvoiceForExport[], salesAccountCode
   return rows.join("\r\n") + "\r\n";
 }
 
-// TODO(Phase 3): MYOB AccountRight import format / API.
+/** MYOB has no live sync: export the CSV above and import it into MYOB. */
 export function invoicesToMyob(): never {
-  throw new Error("MYOB export is planned for Phase 3.");
+  throw new Error("MYOB uses the CSV export (/api/export/xero); there is no live MYOB sync.");
 }

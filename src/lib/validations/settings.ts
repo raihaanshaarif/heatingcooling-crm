@@ -147,3 +147,46 @@ export const sendSmsSchema = z.object({
     .max(SMS_MAX_LENGTH, `Keep it under ${SMS_MAX_LENGTH} characters`),
 });
 export type SendSmsInput = z.input<typeof sendSmsSchema>;
+
+// ─── Xero ────────────────────────────────────────────────────────────────────
+
+const xeroCode = (label: string) =>
+  z
+    .string()
+    .trim()
+    .min(1, `${label} is required`)
+    .max(50)
+    .regex(/^[A-Za-z0-9_.-]+$/, "Letters, numbers, dots, dashes and underscores only");
+
+export const XERO_INVOICE_STATUSES = ["AUTHORISED", "DRAFT"] as const;
+
+export const xeroSettingsSchema = z.object({
+  salesAccountCode: xeroCode("Sales account code"),
+  taxTypeTaxable: xeroCode("Tax rate for GST lines"),
+  taxTypeFree: xeroCode("Tax rate for GST-free lines"),
+  /** Picked from Xero's bank accounts (AccountID); the code is the fallback when typed in. */
+  bankAccountId: z
+    .string()
+    .trim()
+    .max(100)
+    .nullish()
+    .transform((v) => v || null),
+  bankAccountCode: z
+    .string()
+    .trim()
+    .max(50)
+    .nullish()
+    .transform((v) => v || null),
+  bankAccountName: z
+    .string()
+    .trim()
+    .max(200)
+    .nullish()
+    .transform((v) => v || null),
+  invoiceStatus: z.enum(XERO_INVOICE_STATUSES),
+  autoSync: z.boolean(),
+});
+export type XeroSettingsInput = z.input<typeof xeroSettingsSchema>;
+export type XeroSettings = z.output<typeof xeroSettingsSchema>;
+
+export const xeroTenantSchema = z.object({ tenantId: z.string().trim().min(1).max(100) });

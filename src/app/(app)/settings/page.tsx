@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { resolveTemplates } from "@/lib/email/templates";
 import { getSmsConfig, SMS_PROVIDER_LABELS } from "@/lib/sms";
 import { resolveSmsSettings } from "@/lib/sms/templates";
-import { addMelbourneDays } from "@/lib/dates";
+import { addMelbourneDays, formatDateTime } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { getSettings } from "@/server/settings";
 import { templateItems } from "@/server/jobs/service";
@@ -29,6 +29,11 @@ import { EmailTemplatesForm } from "@/components/settings/email-templates-form";
 import { ChecklistTemplates } from "@/components/settings/checklist-templates";
 import { TeamTable } from "@/components/team/team-table";
 import { UserForm } from "@/components/team/user-form";
+import { XeroSettingsForm } from "@/components/xero/xero-settings-form";
+import { XERO_JOB_STATUS_LABELS, XeroLogTable } from "@/components/xero/xero-log-table";
+import { RetryAllFailedButton, SyncNowButton } from "@/components/xero/xero-connection-actions";
+import { resolveXeroSettings } from "@/lib/xero/settings";
+import { getXeroOptions, getXeroOverview, listXeroLog } from "@/server/xero/queries";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -39,6 +44,8 @@ const TABS = [
   { value: "email", label: "Email templates" },
   { value: "sms", label: "SMS" },
   { value: "sms-log", label: "SMS log" },
+  { value: "xero", label: "Xero" },
+  { value: "xero-log", label: "Xero sync log" },
   { value: "checklists", label: "Checklists" },
   { value: "users", label: "Users" },
 ] as const;
@@ -224,6 +231,84 @@ export default async function SettingsPage({
         <SmsLogTable rows={rows} kindLabels={SMS_KIND_LABELS} />
       </div>
     );
+  } else if (tab === "xero") {
+    const [overview, xeroOptions] = await Promise.all([getXeroOverview(), getXeroOptions()]);
+    content = (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            Xero
+            {overview.state === "connected" ? (
+              <Badge variant="success">Connected to {overview.tenantName}</Badge>
+            ) : (
+              <Badge variant="warning">
+                {overview.state === "not-set-up" ? "Not set up" : "Not connected"}
+              </Badge>
+            )}
+          </CardTitle>
+          <CardDescription>
+            How invoices, credit notes and payments are coded when they&apos;re sent to Xero.{" "}
+            {overview.state !== "connected" && (
+              <>
+                Connect Xero on the{" "}
+                <Link href="/integrations" className="underline">
+                  Integrations
+                </Link>{" "}
+                page to pick accounts and tax rates from your Xero organisation.
+              </>
+            )}
+            {xeroOptions.error && (
+              <span className="text-destructive block">
+                Couldn&apos;t load accounts from Xero ({xeroOptions.error}), so codes can be typed
+                in instead.
+              </span>
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <XeroSettingsForm
+            settings={resolveXeroSettings(settings.xeroSettings)}
+            options={xeroOptions.options}
+          />
+        </CardContent>
+      </Card>
+    );
+  } else if (tab === "xero-log") {
+    const status = (["PENDING", "PROCESSING", "DONE", "FAILED", "CANCELLED"] as const).find(
+      (s) => s === statusParam,
+    );
+    const [rows, overview] = await Promise.all([listXeroLog({ status }), getXeroOverview()]);
+    content = (
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-muted-foreground text-sm">
+            {overview.state === "connected"
+              ? `Connected to ${overview.tenantName}. ${overview.pending} waiting, ${overview.failed} failed${overview.retrying ? ` (${overview.retrying} will retry automatically)` : ""}.`
+              : "Xero is not connected, so nothing is being sent."}
+            {overview.lastSyncAt && ` Last sync ${formatDateTime(overview.lastSyncAt)}.`}
+          </p>
+          <span className="flex gap-2">
+            {overview.failed > 0 && <RetryAllFailedButton />}
+            <SyncNowButton />
+          </span>
+        </div>
+        <nav className="flex flex-wrap gap-1" aria-label="Filter by status">
+          {[undefined, "PENDING", "FAILED", "DONE", "CANCELLED"].map((s) => (
+            <Link
+              key={s ?? "all"}
+              href={`/settings?tab=xero-log${s ? `&status=${s}` : ""}`}
+              className={cn(
+                "rounded-md border px-2.5 py-1 text-xs",
+                status === s ? "bg-primary text-primary-foreground" : "hover:bg-muted",
+              )}
+            >
+              {s ? XERO_JOB_STATUS_LABELS[s as keyof typeof XERO_JOB_STATUS_LABELS] : "All"}
+            </Link>
+          ))}
+        </nav>
+        <XeroLogTable rows={rows} canRetry={overview.state === "connected"} />
+      </div>
+    );
   } else if (tab === "checklists") {
     const templates = await db.jobChecklistTemplate.findMany({ orderBy: { name: "asc" } });
     content = (
@@ -271,7 +356,9 @@ export default async function SettingsPage({
           </Link>
         ))}
       </nav>
-      <div className={tab === "sms-log" ? "max-w-6xl" : "max-w-4xl"}>{content}</div>
+      <div className={tab === "sms-log" || tab === "xero-log" ? "max-w-6xl" : "max-w-4xl"}>
+        {content}
+      </div>
     </>
   );
 }

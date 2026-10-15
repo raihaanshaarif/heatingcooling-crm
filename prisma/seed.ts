@@ -55,6 +55,7 @@ import {
   renderSms,
 } from "../src/lib/sms/templates";
 import { addQty, levelsFromMovements, stockStatus } from "../src/lib/inventory";
+import { DEFAULT_XERO_SETTINGS } from "../src/lib/xero/settings";
 
 const prisma = new PrismaClient();
 
@@ -2494,6 +2495,9 @@ async function main(): Promise<void> {
       ].join("\n"),
       emailTemplates: toJson(DEFAULT_EMAIL_TEMPLATES),
       smsSettings: toJson({ enabled: DEFAULT_SMS_ENABLED, templates: DEFAULT_SMS_TEMPLATES }),
+      // Xero mapping defaults (Xero AU chart: 200 Sales, GST on Income / GST Free Income).
+      // Not connected: connecting needs the business's own Xero login (Integrations page).
+      xeroSettings: toJson(DEFAULT_XERO_SETTINGS),
     },
   });
 

@@ -241,6 +241,32 @@ enum StockMovementType {
   JOB_RETURN // job line removed, part goes back where it came from
 }
 
+/// Per-record Xero state. PENDING = queued, SYNCED = in Xero, FAILED = last attempt failed (see XeroSyncJob).
+enum XeroSyncStatus {
+  PENDING
+  SYNCED
+  FAILED
+}
+
+enum XeroJobKind {
+  CONTACT // client → Xero contact
+  INVOICE // create / update an ACCREC invoice
+  VOID_INVOICE // void (or delete, if still a Xero draft)
+  CREDIT_NOTE // ACCRECCREDIT credit note, allocated to its invoice
+  PAYMENT // payment (or refund) into the mapped bank account
+  DELETE_PAYMENT // payment removed in CoolOps → delete it in Xero
+}
+
+/// PENDING = waiting (maybe for a retry), PROCESSING = claimed by a worker, DONE, FAILED = gave up
+/// after the maximum attempts (Retry puts it back to PENDING), CANCELLED = no longer needed.
+enum XeroJobStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+  CANCELLED
+}
+
 enum PaymentTerms {
   ON_COMPLETION
   DAYS_7
@@ -347,8 +373,8 @@ model TechnicianLicence {
 // ─── Clients ─────────────────────────────────────────────────────────────────
 
 model Client {
-  id              String      @id @default(cuid())
-  type            ClientType  @default(RESIDENTIAL)
+  id              String          @id @default(cuid())
+  type            ClientType      @default(RESIDENTIAL)
   name            String
   companyName     String?
   abn             String?
@@ -358,15 +384,19 @@ model Client {
   billingLine1    String?
   billingLine2    String?
   billingSuburb   String?
-  billingState    String      @default("VIC")
+  billingState    String          @default("VIC")
   billingPostcode String?
   notes           String?
-  tags            String[]    @default([])
+  tags            String[]        @default([])
   source          LeadSource?
-  doNotService    Boolean     @default(false)
-  noSms           Boolean     @default(false) // client asked not to be texted
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  doNotService    Boolean         @default(false)
+  noSms           Boolean         @default(false) // client asked not to be texted
+  xeroContactId   String? // several clients may share one Xero contact
+  xeroSyncStatus  XeroSyncStatus?
+  xeroSyncError   String?
+  xeroSyncedAt    DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
   deletedAt       DateTime?
 
   contacts         Contact[]
@@ -383,6 +413,7 @@ model Client {
   @@index([email])
   @@index([phone])
   @@index([deletedAt])
+  @@index([xeroContactId])
 }
 
 model Contact {
@@ -788,28 +819,32 @@ model Attachment {
 // ─── Billing ─────────────────────────────────────────────────────────────────
 
 model Invoice {
-  id              String        @id @default(cuid())
-  number          String        @unique
+  id              String          @id @default(cuid())
+  number          String          @unique
   clientId        String
   propertyId      String?
   jobId           String?
-  status          InvoiceStatus @default(DRAFT)
-  issueDate       DateTime      @default(now())
+  status          InvoiceStatus   @default(DRAFT)
+  issueDate       DateTime        @default(now())
   dueDate         DateTime
-  paymentTerms    PaymentTerms  @default(DAYS_14)
-  subtotalCents   Int           @default(0)
-  gstCents        Int           @default(0)
-  totalCents      Int           @default(0)
-  amountPaidCents Int           @default(0)
-  creditedCents   Int           @default(0)
-  balanceCents    Int           @default(0)
+  paymentTerms    PaymentTerms    @default(DAYS_14)
+  subtotalCents   Int             @default(0)
+  gstCents        Int             @default(0)
+  totalCents      Int             @default(0)
+  amountPaidCents Int             @default(0)
+  creditedCents   Int             @default(0)
+  balanceCents    Int             @default(0)
   notes           String?
   sentAt          DateTime?
   paidAt          DateTime?
   voidedAt        DateTime?
-  publicToken     String        @unique @default(cuid())
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  publicToken     String          @unique @default(cuid())
+  xeroInvoiceId   String?         @unique
+  xeroSyncStatus  XeroSyncStatus?
+  xeroSyncError   String?
+  xeroSyncedAt    DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
   deletedAt       DateTime?
 
   client      Client            @relation(fields: [clientId], references: [id])
@@ -846,17 +881,21 @@ model InvoiceLineItem {
 }
 
 model Payment {
-  id           String        @id @default(cuid())
-  invoiceId    String
-  clientId     String
-  amountCents  Int // negative for refunds
-  method       PaymentMethod
-  reference    String?
-  paidAt       DateTime
-  notes        String?
-  recordedById String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id             String          @id @default(cuid())
+  invoiceId      String
+  clientId       String
+  amountCents    Int // negative for refunds
+  method         PaymentMethod
+  reference      String?
+  paidAt         DateTime
+  notes          String?
+  recordedById   String?
+  xeroPaymentId  String?         @unique
+  xeroSyncStatus XeroSyncStatus?
+  xeroSyncError  String?
+  xeroSyncedAt   DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   invoice    Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   client     Client  @relation(fields: [clientId], references: [id])
@@ -868,14 +907,18 @@ model Payment {
 }
 
 model CreditNote {
-  id          String   @id @default(cuid())
-  number      String   @unique
-  invoiceId   String
-  amountCents Int
-  reason      String
-  issuedAt    DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id               String          @id @default(cuid())
+  number           String          @unique
+  invoiceId        String
+  amountCents      Int
+  reason           String
+  issuedAt         DateTime        @default(now())
+  xeroCreditNoteId String?         @unique
+  xeroSyncStatus   XeroSyncStatus?
+  xeroSyncError    String?
+  xeroSyncedAt     DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
@@ -1099,6 +1142,54 @@ model SmsMessage {
   @@index([createdAt])
 }
 
+// ─── Xero ────────────────────────────────────────────────────────────────────
+
+/// The single Xero connection (id "singleton"). Tokens are AES-256-GCM encrypted with a key
+/// derived from AUTH_SECRET. tenantId is null until the admin picks the organisation.
+model XeroConnection {
+  id                String    @id @default("singleton")
+  tenantId          String?
+  tenantName        String?
+  /// Organisations the token can reach, [{ tenantId, tenantName, connectionId }], for the picker.
+  tenants           Json?
+  accessTokenEnc    String
+  refreshTokenEnc   String
+  accessTokenExpiry DateTime
+  scopes            String
+  connectedById     String?
+  lastSyncAt        DateTime?
+  lastError         String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+/// Outbox: one row per thing to push to Xero, written in the same transaction as the change.
+model XeroSyncJob {
+  id            String        @id @default(cuid())
+  kind          XeroJobKind
+  /// The CoolOps record: client / invoice / credit note / payment id.
+  entityId      String
+  /// Invoice the job belongs to (for the invoice page), when there is one.
+  invoiceId     String?
+  /// Extra data, e.g. the Xero PaymentID for DELETE_PAYMENT (the payment row is gone).
+  payload       Json?
+  /// Short human label, e.g. "INV-0042" or "Payment $120.00 on INV-0042".
+  label         String
+  status        XeroJobStatus @default(PENDING)
+  attempts      Int           @default(0)
+  nextAttemptAt DateTime      @default(now())
+  lockedAt      DateTime?
+  lastError     String?
+  completedAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([invoiceId])
+  @@index([kind, entityId])
+  @@index([createdAt])
+}
+
 // ─── System ──────────────────────────────────────────────────────────────────
 
 model Notification {
@@ -1162,6 +1253,8 @@ model BusinessSettings {
   quoteTerms              String?
   emailTemplates          Json?
   smsSettings             Json? // { enabled: { onMyWay: true, … }, templates: { onMyWay: "…", … } }
+  xeroSettings            Json? // account codes, tax types, bank account, invoice status, auto sync
+  xeroTenantId            String? // organisation the stored Xero IDs belong to (cleared when it changes)
   timezone                String       @default("Australia/Melbourne")
   createdAt               DateTime     @default(now())
   updatedAt               DateTime     @updatedAt

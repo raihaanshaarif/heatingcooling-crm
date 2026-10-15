@@ -9,6 +9,12 @@ import { paymentSchema } from "@/lib/validations/invoices";
 import { NotFoundError, UserError, idSchema, runAction } from "@/server/action";
 import { audit, logActivity } from "@/server/audit";
 import { recalcInvoice } from "@/server/invoices/service";
+import {
+  kickXeroSync,
+  queueInvoiceSync,
+  queuePaymentDelete,
+  queuePaymentSync,
+} from "@/server/xero/queue";
 
 function revalidatePayments(invoiceId: string, clientId: string) {
   revalidatePath("/payments");
@@ -67,8 +73,12 @@ export async function recordPayment(input: z.input<typeof paymentSchema>) {
           entityId: created.id,
           changes: { invoiceId: invoice.id, amountCents, method: d.method },
         });
+        // The invoice must be in Xero before a payment can go against it.
+        if (!invoice.xeroInvoiceId) await queueInvoiceSync(tx, invoice);
+        await queuePaymentSync(tx, created, invoice);
         return created;
       });
+      kickXeroSync();
       revalidatePayments(invoice.id, invoice.clientId);
       return { id: payment.id };
     },
@@ -80,9 +90,13 @@ export async function deletePayment(input: { id: string }) {
     { schema: idSchema, permission: ["delete", "payments"] },
     input,
     async ({ id }, user) => {
-      const payment = await db.payment.findUnique({ where: { id } });
+      const payment = await db.payment.findUnique({
+        where: { id },
+        include: { invoice: { select: { id: true, number: true } } },
+      });
       if (!payment) throw new NotFoundError("Payment");
       await db.$transaction(async (tx) => {
+        await queuePaymentDelete(tx, payment, payment.invoice);
         await tx.payment.delete({ where: { id } });
         await recalcInvoice(tx, payment.invoiceId);
         await logActivity(tx, {
@@ -100,6 +114,7 @@ export async function deletePayment(input: { id: string }) {
           changes: { amountCents: payment.amountCents },
         });
       });
+      kickXeroSync();
       revalidatePayments(payment.invoiceId, payment.clientId);
       return null;
     },

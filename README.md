@@ -31,14 +31,14 @@ Technicians land on **My Jobs**, a phone-first view with big _On my way / Start 
 
 ## Scripts
 
-| Command                                                                | What it does                                                                                                       |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `pnpm dev` / `build` / `start`                                         | Next.js                                                                                                            |
-| `pnpm lint`                                                            | ESLint, zero warnings allowed                                                                                      |
-| `pnpm typecheck`                                                       | `tsc --noEmit`                                                                                                     |
-| `pnpm test`                                                            | Vitest: money/GST, numbering, permissions, invoice status, dates, rate limiting, lead validation, stock logic, SMS |
-| `pnpm format`                                                          | Prettier                                                                                                           |
-| `pnpm db:migrate` / `db:deploy` / `db:seed` / `db:reset` / `db:studio` | Prisma                                                                                                             |
+| Command                                                                | What it does                                                                                                             |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `pnpm dev` / `build` / `start`                                         | Next.js                                                                                                                  |
+| `pnpm lint`                                                            | ESLint, zero warnings allowed                                                                                            |
+| `pnpm typecheck`                                                       | `tsc --noEmit`                                                                                                           |
+| `pnpm test`                                                            | Vitest: money/GST, numbering, permissions, invoice status, dates, rate limiting, lead validation, stock logic, SMS, Xero |
+| `pnpm format`                                                          | Prettier                                                                                                                 |
+| `pnpm db:migrate` / `db:deploy` / `db:seed` / `db:reset` / `db:studio` | Prisma                                                                                                                   |
 
 ## Website enquiry form → leads
 
@@ -113,6 +113,40 @@ Clients get texts from the business (each one can be switched off and reworded u
 
 If the provider is chosen but a credential is missing, the app falls back to logging and the Integrations page says which variable is missing. The real Twilio / MessageMedia APIs were not called during development (no credentials); request building and response parsing are covered by tests.
 
+## Xero (live sync)
+
+One-way sync **CoolOps → Xero** over the Xero Accounting API (OAuth 2.0). Nothing comes back from Xero, so keep making changes in CoolOps.
+
+| CoolOps                       | Xero                                                                                                                                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Client                        | Contact. Linked by stored ContactID, else matched by email, then name, else created (CoolOps client id in the read-only _Contact number_ field). Edits to a linked client are pushed. |
+| Invoice sent / marked as sent | ACCREC invoice: number = CoolOps number, reference = job number, dates, due date, lines with quantity, unit price ex GST, account code and tax type.                                  |
+| Invoice edited after sending  | The Xero invoice is updated (not once Xero has payments or credits on it).                                                                                                            |
+| Invoice voided                | Voided in Xero (deleted if it's still a Xero draft). Never pushed → nothing to do.                                                                                                    |
+| Credit note                   | ACCRECCREDIT credit note, allocated to the invoice (up to what the invoice still owes in Xero).                                                                                       |
+| Payment                       | Payment against the invoice into the chosen bank account.                                                                                                                             |
+| Refund (negative payment)     | Money paid out against a credit note on that invoice (Xero has no negative invoice payments). Issue the credit note first.                                                            |
+| Payment removed               | The Xero payment is deleted.                                                                                                                                                          |
+
+- **GST to the cent.** CoolOps calculates GST once on the taxable subtotal; Xero works per line. Each line is sent with an explicit `LineAmount` and `TaxAmount`, with the invoice's GST spread over the taxable lines so Xero's totals match CoolOps exactly. GST-free lines use the GST-free tax rate. Not GST registered → every line is GST free.
+- **Outbox queue.** Every change writes a row to `XeroSyncJob` in the same database transaction. With _Sync automatically_ on, the queue is processed straight after the action responds (Next.js `after()`, non-blocking), and the daily cron catches up. With it off, only **Sync now** sends. Jobs run oldest first, one at a time (Xero allows 60 calls a minute). Failures retry after 1 min, 5 min, 30 min, 2 h, 6 h, then stop (6 attempts). Validation errors (e.g. a wrong account code) fail straight away. A 429 waits for Xero's `Retry-After` and doesn't use up an attempt. A dead token pauses the queue for 15 minutes.
+- **No duplicates.** Xero IDs are stored on clients, invoices, credit notes and payments (`xeroContactId`, `xeroInvoiceId`, …) with a per-record sync status and error. Before creating an invoice or credit note it is looked up by number in Xero, and every create is sent with an `Idempotency-Key`.
+- **Where to see it.** Invoice page: a _Xero_ card ("Xero: failed — reason" with **Retry**, or "Synced · Open in Xero", or **Push to Xero** for invoices sent before Xero was connected), plus "In Xero" / "Xero: failed" next to each payment and credit note. Admins: **Settings → Xero sync log** (filter, Retry, Retry all failed, Sync now) and the Integrations card (organisation, last sync, waiting / failed counts, Connect / Sync now / Settings / Disconnect).
+- **Mapping** (**Settings → Xero**, admin): sales account (default 200), tax rate for GST lines (`OUTPUT`) and GST-free lines (`EXEMPTOUTPUT`), bank account for payments (picked from Xero's bank accounts), invoices sent as _Approved_ (default) or _Draft_, automatic or manual sync. Payments and allocations only work on approved invoices.
+- **Tokens** (access + refresh) are encrypted at rest with AES-256-GCM using a key derived from `AUTH_SECRET` (HKDF), refreshed automatically (and by the daily cron so the 60-day refresh token never lapses). **Disconnect** revokes them at Xero and deletes them. Records keep their Xero links, so reconnecting the same organisation carries on; switching to a different organisation clears them.
+- Permissions: admins connect, change settings and see the log; office staff see an invoice's Xero status and can click Retry; technicians see nothing.
+- Code: `src/lib/xero` (OAuth URLs and token requests, API client with 401 refresh / 429 handling / throttle, payload builders, retry policy, token encryption; all unit-tested with a mocked `fetch`), `src/server/xero` (connection, queue triggers, sync worker, actions, queries), `src/app/api/integrations/xero/{connect,callback}`.
+
+| Variable                                | What                                                                                                                                                             |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `XERO_CLIENT_ID` / `XERO_CLIENT_SECRET` | From your app at developer.xero.com → My Apps (type _Web app_). Redirect URI: `{APP_URL}/api/integrations/xero/callback`. Empty: the card says _Not set up_.     |
+| `XERO_SCOPES`                           | Optional. Default `offline_access accounting.transactions accounting.contacts accounting.settings.read`. Change only if Xero asks your app for different scopes. |
+| `XERO_API_URL` / `XERO_IDENTITY_URL`    | Testing only: point the API / token calls at a mock server.                                                                                                      |
+
+**MYOB** has no live sync: use the CSV export (**Integrations → Accounting export (CSV)**, `/api/export/xero`) and import it into MYOB. The CSV keeps working for Xero too.
+
+The real Xero API was not called during development (no Xero app or organisation). Payload building, OAuth requests, token encryption and the retry rules are unit-tested; the full flow (connect, contacts, invoices, voids, credit notes with allocation, payments, payment deletion, 429 handling, validation errors) was clicked through in the browser against a local mock of the Xero endpoints. Try it against the Xero Demo Company before going live.
+
 ## How the money works
 
 - All amounts are integer cents. GST is 10%, applied per line (each line can be GST-free) and calculated once on the taxable subtotal so rounding never drifts. Logic lives in `src/lib/money.ts` with tests.
@@ -128,7 +162,8 @@ If the provider is chosen but a credential is missing, the app falls back to log
 2. emails clients whose maintenance plan is due within 14 days and tells the office,
 3. warns about technician licences (ARC, gas, electrical…) and equipment warranties expiring within 30 days,
 4. expires quotes past their valid-until date,
-5. texts (SMS) clients with a job scheduled tomorrow, clients whose plan is due within 14 days, and, if switched on, overdue invoices (see SMS texts below).
+5. texts (SMS) clients with a job scheduled tomorrow, clients whose plan is due within 14 days, and, if switched on, overdue invoices (see SMS texts below),
+6. refreshes the Xero connection and, with automatic sync on, sends anything still waiting to Xero (see Xero above).
 
 Every reminder is de-duplicated, so running it twice does nothing extra. On Coolify it runs as a scheduled task (see Deploy below); `pnpm cron:reminders` calls the endpoint from inside the app container.
 
@@ -147,6 +182,7 @@ Coolify builds and runs the container itself with Nixpacks, so the repo has no D
    - `RESEND_API_KEY` and `EMAIL_FROM` (a domain verified in Resend).
    - `LEAD_WEBHOOK_SECRET` and `CRON_SECRET`: long random strings.
    - Optional SMS: `SMS_PROVIDER` plus the provider's keys and `SMS_FROM` (see SMS texts above).
+   - Optional Xero: `XERO_CLIENT_ID` and `XERO_CLIENT_SECRET` (see Xero above), then **Integrations → Connect to Xero**.
    - `TZ=Australia/Melbourne` is optional; the app always uses Melbourne time anyway.
 4. **File uploads** (job photos, signatures, logo). Easiest: keep `STORAGE_DRIVER=local`, set `STORAGE_LOCAL_DIR=/app/uploads`, and in the app's _Storages_ tab add a persistent volume mounted at `/app/uploads` so files survive redeploys. Or use `STORAGE_DRIVER=s3` with Cloudflare R2 / S3.
 5. **Domain.** Set it under the app's _Domains_. Coolify issues the HTTPS certificate.
@@ -160,9 +196,9 @@ prisma/              schema (all phases), migrations, seed
 src/app/(auth)       login
 src/app/(app)        the staff app (dashboard, leads, clients, quotes, jobs, schedule, my-jobs, invoices, payments, maintenance, inventory, suppliers, reports, team, settings, audit log)
 src/app/(public)     client-facing quote (/q/[token]) and invoice (/i/[token]) pages
-src/app/api          auth, lead webhook, PDFs, report CSVs, Xero export, cron, file serving
+src/app/api          auth, lead webhook, PDFs, report CSVs, Xero export + OAuth, cron, file serving
 src/server/<module>  queries.ts (reads) and actions.ts (server actions: Zod validation, permission check, transaction, audit log, activity)
-src/lib              money, dates (Melbourne), numbering, permissions, invoice status, storage, email, PDF, validations (shared Zod schemas)
+src/lib              money, dates (Melbourne), numbering, permissions, invoice status, storage, email, SMS, Xero, PDF, validations (shared Zod schemas)
 src/components       UI (shadcn), data tables, forms, feature components
 src/emails           React Email templates
 ```
@@ -173,5 +209,4 @@ Permissions are enforced in four places: middleware (routes), `src/lib/permissio
 
 The database schema already covers these; code entry points are marked `TODO(Phase 2)` / `TODO(Phase 3)` and listed on the in-app _Integrations_ page.
 
-- **Xero / MYOB sync**: a Xero import CSV works today (`/api/export/xero`); live API sync is Phase 3. `src/lib/integrations/accounting.ts`.
 - **Google Calendar sync** for technicians. `src/lib/integrations/google-calendar.ts`.
