@@ -17,6 +17,7 @@ import { formatTime, relativeDays } from "@/lib/dates";
 import { daysOverdue } from "@/lib/invoice-status";
 import { LEAD_SOURCE_LABELS, SERVICE_CATEGORY_LABELS } from "@/lib/labels";
 import { getDashboard } from "@/server/dashboard/queries";
+import { getLowStockSummary } from "@/server/inventory/queries";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/shared/page-header";
@@ -29,7 +30,8 @@ export const metadata: Metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
   const user = await requirePermission("view", "dashboard");
-  const d = await getDashboard();
+  const showStock = can(user, "view", "inventory");
+  const [d, stock] = await Promise.all([getDashboard(), showStock ? getLowStockSummary() : null]);
   const change = percentChange(d.revenueThisMonth, d.revenueLastMonth);
   const quickActions = [
     { label: "New lead", href: "/leads?new=1", icon: UserPlus, show: can(user, "create", "leads") },
@@ -65,6 +67,10 @@ export default async function DashboardPage() {
     d.warranties > 0 && {
       text: `${d.warranties} equipment warrant${d.warranties > 1 ? "ies" : "y"} expiring within 30 days`,
       href: "/equipment",
+    },
+    !!stock?.negative && {
+      text: `${stock.negative} part${stock.negative > 1 ? "s show" : " shows"} negative stock in a van or the warehouse`,
+      href: "/inventory",
     },
     ...d.licences.map((l) => ({
       text: `${l.user.name}'s licence ${l.number} ${l.expiresAt && l.expiresAt < new Date() ? "has expired" : `expires ${relativeDays(l.expiresAt!)}`}`,
@@ -123,6 +129,15 @@ export default async function DashboardPage() {
           hint={`${d.openQuotesCount} quotes`}
           href="/quotes?status=SENT&status=VIEWED"
         />
+        {stock && (
+          <StatCard
+            label="Low stock"
+            value={stock.low}
+            hint={stock.low ? "Parts below reorder level" : "All parts above reorder level"}
+            tone={stock.low ? "danger" : "default"}
+            href="/inventory?view=low"
+          />
+        )}
       </div>
 
       {alerts.length > 0 && (

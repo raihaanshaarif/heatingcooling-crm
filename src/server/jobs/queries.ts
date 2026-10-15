@@ -1,5 +1,5 @@
 import "server-only";
-import type { Prisma } from "@prisma/client";
+import type { Prisma, StockMovementType } from "@prisma/client";
 import { db } from "@/lib/db";
 import { toNumber } from "@/lib/utils";
 import type { SessionUser } from "@/lib/auth/session";
@@ -46,7 +46,20 @@ const jobInclude = {
   },
   equipment: { include: { equipment: true } },
   checklistItems: { orderBy: { sortOrder: "asc" as const } },
-  lineItems: { orderBy: { sortOrder: "asc" as const } },
+  lineItems: {
+    orderBy: { sortOrder: "asc" as const },
+    include: {
+      priceBookItem: { select: { inventoryItems: { select: { active: true } } } },
+      stockMovements: {
+        select: {
+          type: true,
+          quantity: true,
+          fromLocation: { select: { name: true } },
+          toLocation: { select: { name: true } },
+        },
+      },
+    },
+  },
   timeEntries: {
     orderBy: { startedAt: "asc" as const },
     include: { user: { select: { id: true, name: true } } },
@@ -56,6 +69,26 @@ const jobInclude = {
     select: { id: true, number: true, status: true, totalCents: true },
   },
 } satisfies Prisma.JobInclude;
+
+/** Where a job line's part came from ("Jack Wilson's van"), and whether it could be taken from stock. */
+function lineStock(
+  priceBookItem: { inventoryItems: { active: boolean }[] } | null,
+  movements: {
+    type: StockMovementType;
+    quantity: Prisma.Decimal;
+    fromLocation: { name: string } | null;
+    toLocation: { name: string } | null;
+  }[],
+) {
+  const used = movements.filter((m) => m.type === "JOB_USE");
+  const tracked = !!priceBookItem?.inventoryItems.some((i) => i.active);
+  return {
+    stockSource: used.length
+      ? [...new Set(used.map((m) => m.fromLocation?.name).filter(Boolean))].join(", ")
+      : null,
+    canTakeFromStock: tracked && movements.length === 0,
+  };
+}
 
 export async function getJob(id: string, user: SessionUser) {
   const job = await db.job.findFirst({
@@ -82,7 +115,11 @@ export async function getJob(id: string, user: SessionUser) {
       ...je,
       equipment: { ...je.equipment, capacityKw: toNumber(je.equipment.capacityKw) },
     })),
-    lineItems: job.lineItems.map((l) => ({ ...l, quantity: toNumber(l.quantity) ?? 0 })),
+    lineItems: job.lineItems.map(({ priceBookItem, stockMovements, ...l }) => ({
+      ...l,
+      quantity: toNumber(l.quantity) ?? 0,
+      ...lineStock(priceBookItem, stockMovements),
+    })),
     attachments,
     timeline,
   };

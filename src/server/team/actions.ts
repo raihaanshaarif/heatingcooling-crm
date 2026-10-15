@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { changePasswordSchema, licenceSchema, userSchema } from "@/lib/validations/team";
 import { NotFoundError, UserError, idSchema, runAction } from "@/server/action";
 import { audit, diff } from "@/server/audit";
+import { ensureStockLocations } from "@/server/inventory/service";
 
 function revalidateTeam(id?: string) {
   revalidatePath("/team");
@@ -56,7 +57,10 @@ export async function saveUser(id: string | null, input: z.input<typeof userSche
         });
         return saved;
       });
+      // New technicians get a van; leavers' vans are deactivated.
+      await ensureStockLocations();
       revalidateTeam(user.id);
+      revalidatePath("/inventory");
       return { id: user.id };
     },
   );

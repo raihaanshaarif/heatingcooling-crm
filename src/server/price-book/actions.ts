@@ -52,7 +52,7 @@ export async function savePriceBookItem(
   );
 }
 
-/** Items used on quotes/jobs are deactivated rather than deleted so history stays intact. */
+/** Items used on quotes/jobs (or with stock history) are deactivated rather than deleted so history stays intact. */
 export async function deletePriceBookItem(input: { id: string }) {
   return runAction(
     { schema: idSchema, permission: ["delete", "priceBook"] },
@@ -60,7 +60,8 @@ export async function deletePriceBookItem(input: { id: string }) {
     async ({ id }, user) => {
       const used =
         (await db.quoteLineItem.count({ where: { priceBookItemId: id } })) +
-        (await db.jobLineItem.count({ where: { priceBookItemId: id } }));
+        (await db.jobLineItem.count({ where: { priceBookItemId: id } })) +
+        (await db.stockMovement.count({ where: { item: { priceBookItemId: id } } }));
       if (used > 0) {
         await db.priceBookItem.update({ where: { id }, data: { active: false } });
         await audit(db, {

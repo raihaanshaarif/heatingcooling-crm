@@ -40,6 +40,12 @@ import {
   type ActionResult,
 } from "@/server/action";
 import { audit, diff, logActivity, notifyUsers } from "@/server/audit";
+import {
+  deductForJobLine,
+  describeStockNote,
+  returnForJobLine,
+  type StockNote,
+} from "@/server/inventory/service";
 import { applyChecklist, loadJobFor } from "./service";
 
 function revalidateJob(id?: string) {
@@ -481,7 +487,7 @@ export async function addJobLineItem(input: z.input<typeof jobLineItemSchema>) {
     { schema: jobLineItemSchema, permission: ["update", "jobs"] },
     input,
     async (d, user) => {
-      await db.$transaction(async (tx) => {
+      const stock = await db.$transaction(async (tx) => {
         const job = await loadJobFor(user, d.jobId, tx);
         if (job.status === "INVOICED") throw new UserError("This job is already invoiced.");
         let unitPrice = d.unitPrice;
@@ -508,7 +514,7 @@ export async function addJobLineItem(input: z.input<typeof jobLineItemSchema>) {
           unitCost = tech?.hourlyCostCents ?? 0;
         }
         const count = await tx.jobLineItem.count({ where: { jobId: d.jobId } });
-        await tx.jobLineItem.create({
+        const line = await tx.jobLineItem.create({
           data: {
             jobId: d.jobId,
             priceBookItemId: d.priceBookItemId,
@@ -535,9 +541,20 @@ export async function addJobLineItem(input: z.input<typeof jobLineItemSchema>) {
           entityId: d.jobId,
           changes: { lineAdded: d.description },
         });
+        // Parts tracked in inventory come out of the technician's van (or the warehouse).
+        const note: StockNote | null = await deductForJobLine(tx, {
+          jobId: d.jobId,
+          line: { ...line, quantity: d.quantity },
+          actingUserId: user.id,
+        });
+        return note;
       });
       revalidateJob(d.jobId);
-      return null;
+      if (stock) revalidatePath("/inventory");
+      return {
+        stockMessage: describeStockNote(stock, user.role === "TECHNICIAN"),
+        negativeStock: stock?.negative ?? false,
+      };
     },
   );
 }
@@ -549,9 +566,15 @@ export async function deleteJobLineItem(input: { id: string }) {
     async ({ id }, user) => {
       const line = await db.jobLineItem.findUnique({ where: { id } });
       if (!line) throw new NotFoundError("Line");
-      await db.$transaction(async (tx) => {
+      const returned = await db.$transaction(async (tx) => {
         const job = await loadJobFor(user, line.jobId, tx);
         if (job.status === "INVOICED") throw new UserError("This job is already invoiced.");
+        // Anything this line took from stock goes back where it came from.
+        const returned = await returnForJobLine(tx, {
+          jobId: line.jobId,
+          lineId: id,
+          actingUserId: user.id,
+        });
         await tx.jobLineItem.delete({ where: { id } });
         await audit(tx, {
           userId: user.id,
@@ -560,9 +583,15 @@ export async function deleteJobLineItem(input: { id: string }) {
           entityId: line.jobId,
           changes: { lineRemoved: line.description },
         });
+        return returned;
       });
       revalidateJob(line.jobId);
-      return null;
+      if (returned.length) revalidatePath("/inventory");
+      return {
+        stockMessage: returned.length
+          ? `Returned to ${returned.map((r) => r.locationName).join(", ")}.`
+          : null,
+      };
     },
   );
 }

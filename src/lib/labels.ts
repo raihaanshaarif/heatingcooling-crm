@@ -15,6 +15,8 @@ import type {
   QuoteStatus,
   Role,
   ServiceCategory,
+  StockLocationType,
+  StockMovementType,
 } from "@prisma/client";
 
 export const ROLE_LABELS: Record<Role, string> = {
@@ -158,6 +160,36 @@ export const ITEM_TYPE_LABELS: Record<ItemType, string> = {
   CALL_OUT: "Call-out fee",
   OTHER: "Other",
 };
+
+export const STOCK_MOVEMENT_LABELS: Record<StockMovementType, string> = {
+  RECEIVE: "Received",
+  TRANSFER: "Transfer",
+  ADJUST: "Adjustment",
+  JOB_USE: "Used on job",
+  JOB_RETURN: "Returned from job",
+};
+
+export const STOCK_LOCATION_TYPE_LABELS: Record<StockLocationType, string> = {
+  WAREHOUSE: "Warehouse",
+  VAN: "Van",
+};
+
+export const STOCK_STATUS_LABELS = {
+  OK: "In stock",
+  LOW: "Low",
+  OUT: "Out of stock",
+  NEGATIVE: "Negative",
+} as const;
+
+export const STOCK_ADJUST_REASONS = [
+  "Stocktake count",
+  "Damaged / faulty",
+  "Lost or missing",
+  "Returned to supplier",
+  "Used without a job",
+  "Found / recounted",
+  "Correction",
+] as const;
 
 export const LICENCE_TYPE_LABELS: Record<LicenceType, string> = {
   ARC_REFRIGERANT: "ARC Refrigerant Handling",

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { CalendarDays, Download, Globe, Mail, MessageSquare, Package } from "lucide-react";
 import { requirePermission } from "@/lib/auth/session";
+import { db } from "@/lib/db";
 import { isGoogleCalendarConfigured } from "@/lib/integrations/google-calendar";
 import { appUrl } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +20,7 @@ function Status({ ready, phase }: { ready: boolean; phase?: string }) {
 
 export default async function IntegrationsPage() {
   await requirePermission("view", "settings");
+  const inventoryTracked = await db.inventoryItem.count({ where: { active: true } });
   const webhookUrl = appUrl("/api/leads/webhook");
   const items = [
     {
@@ -72,8 +75,29 @@ export default async function IntegrationsPage() {
     {
       icon: Package,
       title: "Inventory & van stock",
-      status: <Status ready={false} phase="Phase 3" />,
-      body: "Suppliers, stock levels per van and warehouse, auto-deduct parts used on jobs. Database tables (Supplier, InventoryItem) already exist.",
+      status: inventoryTracked ? (
+        <Badge variant="success">In use</Badge>
+      ) : (
+        <Badge variant="warning">Not set up</Badge>
+      ),
+      body: (
+        <>
+          Stock in the warehouse and each technician&apos;s van, low-stock alerts, suppliers and
+          deliveries. Parts added to a job are taken from the technician&apos;s van automatically.
+          Built in, no API keys needed.{" "}
+          {inventoryTracked
+            ? `${inventoryTracked} part${inventoryTracked === 1 ? "" : "s"} tracked.`
+            : "To start: add your suppliers, then on Inventory use Track item for each part you keep, and Receive stock to load the opening quantities."}
+          <span className="mt-2 flex gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link href="/inventory">Open Inventory</Link>
+            </Button>
+            <Button asChild size="sm" variant="ghost">
+              <Link href="/suppliers">Suppliers</Link>
+            </Button>
+          </span>
+        </>
+      ),
     },
   ];
   return (

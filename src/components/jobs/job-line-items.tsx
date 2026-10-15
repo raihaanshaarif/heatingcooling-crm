@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ItemType } from "@prisma/client";
-import { Plus, Trash2 } from "lucide-react";
+import { PackageMinus, Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,7 @@ import { PriceBookPicker } from "@/components/line-items/price-book-picker";
 import { ITEM_TYPE_LABELS, options } from "@/lib/labels";
 import { calculateTotals, formatCents, lineTotalCents, marginPercent } from "@/lib/money";
 import { addJobLineItem, deleteJobLineItem } from "@/server/jobs/actions";
+import { deductJobLineStock } from "@/server/inventory/actions";
 import type { PriceBookPickerItem } from "@/server/price-book/queries";
 
 export interface JobLine {
@@ -40,11 +42,17 @@ export interface JobLine {
   unitPriceCents: number;
   unitCostCents: number;
   taxable: boolean;
+  /** Stock location the part was taken from, when it came out of inventory. */
+  stockSource?: string | null;
+  /** A tracked part that hasn't been taken from stock yet (e.g. copied from a quote). */
+  canTakeFromStock?: boolean;
 }
 
 /**
  * Labour and parts used on a job. Technicians add items from the price book and
  * never see prices; the office sees prices, and admins also see cost and margin.
+ * Parts tracked in inventory are taken from the technician's van automatically and
+ * go back when the line is removed.
  */
 export function JobLineItems({
   jobId,
@@ -54,6 +62,7 @@ export function JobLineItems({
   showCosts,
   gstRegistered,
   readOnly,
+  canMoveStock = false,
 }: {
   jobId: string;
   lines: JobLine[];
@@ -62,13 +71,29 @@ export function JobLineItems({
   showCosts: boolean;
   gstRegistered: boolean;
   readOnly?: boolean;
+  /** Office / admin: offer "Take from stock" on tracked lines not yet deducted. */
+  canMoveStock?: boolean;
 }) {
   const router = useRouter();
   const add = useAction(addJobLineItem, {
-    successMessage: "Added to job",
+    successMessage: (d) =>
+      d.negativeStock ? "" : d.stockMessage ? `Added to job. ${d.stockMessage}` : "Added to job",
+    onSuccess: (d) => {
+      if (d.negativeStock && d.stockMessage) toast.warning(`Added to job. ${d.stockMessage}`);
+      router.refresh();
+    },
+  });
+  const remove = useAction(deleteJobLineItem, {
+    successMessage: (d) => d.stockMessage ?? "",
     onSuccess: () => router.refresh(),
   });
-  const remove = useAction(deleteJobLineItem, { onSuccess: () => router.refresh() });
+  const takeFromStock = useAction(deductJobLineStock, {
+    successMessage: (d) => (d.negative ? "" : (d.message ?? "Taken from stock")),
+    onSuccess: (d) => {
+      if (d.negative && d.message) toast.warning(d.message);
+      router.refresh();
+    },
+  });
   const totals = calculateTotals(lines, gstRegistered);
   const cost = lines.reduce((s, l) => s + lineTotalCents(l.quantity, l.unitCostCents), 0);
   const margin = marginPercent(cost, totals.subtotalCents);
@@ -108,7 +133,19 @@ export function JobLineItems({
                     {l.description}
                     <span className="text-muted-foreground block text-xs">
                       {ITEM_TYPE_LABELS[l.type]}
+                      {l.stockSource && ` · from ${l.stockSource}`}
                     </span>
+                    {!readOnly && canMoveStock && l.canTakeFromStock && (
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="h-auto p-0 text-xs"
+                        disabled={takeFromStock.pending}
+                        onClick={() => void takeFromStock.run({ id: l.id })}
+                      >
+                        <PackageMinus className="size-3" /> Take from stock
+                      </Button>
+                    )}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{l.quantity}</TableCell>
                   {showPrices && (

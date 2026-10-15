@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronRight, Clock, MapPin } from "lucide-react";
+import { ChevronRight, Clock, MapPin, Truck } from "lucide-react";
 import { requirePermission } from "@/lib/auth/session";
 import { addMelbourneDays, formatDate, formatTime, startOfMelbourneDay } from "@/lib/dates";
 import { formatAddress } from "@/lib/utils";
 import { getMyJobs } from "@/server/jobs/queries";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -83,6 +84,15 @@ export default async function MyJobsPage() {
       <PageHeader
         title={`G'day, ${user.name.split(" ")[0]}`}
         description={`${todays.length} job${todays.length === 1 ? "" : "s"} today`}
+        actions={
+          user.role === "TECHNICIAN" && (
+            <Button asChild variant="outline" size="sm">
+              <Link href="/my-jobs/van">
+                <Truck /> My van stock
+              </Link>
+            </Button>
+          )
+        }
       />
       <div className="mx-auto max-w-2xl space-y-6">
         {groups

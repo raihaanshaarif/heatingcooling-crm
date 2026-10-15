@@ -32,6 +32,19 @@ describe("permissions", () => {
     expect(can(tech, "view", "leads")).toBe(false);
   });
 
+  it("lets office move stock but keeps stock value and deleting to admin", () => {
+    expect(can(admin, "view", "inventoryCosts")).toBe(true);
+    expect(can(office, "view", "inventory")).toBe(true);
+    expect(can(office, "create", "inventory")).toBe(true);
+    expect(can(office, "delete", "inventory")).toBe(false);
+    expect(can(office, "view", "inventoryCosts")).toBe(false);
+    expect(can(office, "update", "suppliers")).toBe(true);
+    expect(can(tech, "view", "inventory")).toBe(false);
+    expect(can(tech, "view", "suppliers")).toBe(false);
+    expect(canViewPath(tech, "/inventory")).toBe(false);
+    expect(canViewPath(office, "/suppliers")).toBe(true);
+  });
+
   it("denies anonymous users", () => {
     expect(can(null, "view", "dashboard")).toBe(false);
     expect(can(undefined, "view", "myJobs")).toBe(false);

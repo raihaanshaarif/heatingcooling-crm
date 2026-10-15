@@ -45,6 +45,7 @@ import {
   toDateInput,
 } from "../src/lib/dates";
 import { DEFAULT_EMAIL_TEMPLATES } from "../src/lib/email/templates";
+import { addQty, levelsFromMovements, stockStatus } from "../src/lib/inventory";
 
 const prisma = new PrismaClient();
 
@@ -1552,6 +1553,515 @@ const totalsOf = (lines: LineSpec[]) => calculateTotals(lines);
 
 function toJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
+
+// ─── Inventory ──────────────────────────────────────────────────────────────
+
+type Loc = "W" | "J" | "L"; // warehouse, tech1's van, tech2's van
+
+interface StockSeed {
+  sku: string;
+  reorder: number;
+  supplier: string;
+  supplierSku: string;
+  /** Quantities wanted at the end of the seeded history (opening stocktake is worked back from these). */
+  target: Record<Loc, number>;
+}
+
+const SUPPLIERS = [
+  {
+    key: "coolair",
+    name: "Coolair Wholesale – Dandenong South",
+    contact: "Trade counter (Mick)",
+    phone: "03 9799 4410",
+    email: "trade.dandenong@coolair-wholesale.example.com.au",
+    accountNumber: "CSM-20417",
+    website: "https://coolair-wholesale.example.com.au",
+    notes:
+      "Capacitors, fan motors, drain pumps, brackets and filters. Delivers Tue/Thu before 10am.",
+  },
+  {
+    key: "refgas",
+    name: "RefriGas Supplies Melbourne",
+    contact: "Sarah Nguyen",
+    phone: "03 9311 2280",
+    email: "orders@refrigas.example.com.au",
+    accountNumber: "77-3190",
+    website: null,
+    notes: "R32 and R410A cylinders (9.5 kg / 10 kg). Cylinder deposit on account. Laverton North.",
+  },
+  {
+    key: "sparkline",
+    name: "Sparkline Electrical Wholesale",
+    contact: "Counter sales",
+    phone: "03 9545 0071",
+    email: "clayton@sparkline-elec.example.com.au",
+    accountNumber: "SPK-88213",
+    website: null,
+    notes: "Isolators, cable and conduit. Clayton branch, open 6:30am.",
+  },
+  {
+    key: "gasparts",
+    name: "Southern Gas & Evap Parts",
+    contact: "Dean Matthews",
+    phone: "0412 668 903",
+    email: "dean@southerngasparts.example.com.au",
+    accountNumber: "SGP-1042",
+    website: null,
+    notes: "Igniters, flame sensors and evaporative cooler spares. Next-day courier.",
+  },
+  {
+    key: "ductline",
+    name: "Ductline Supplies (old account)",
+    contact: null,
+    phone: "03 9763 1200",
+    email: null,
+    accountNumber: "DL-5521",
+    website: null,
+    notes: "Switched to Coolair for filters and duct in 2025.",
+    active: false,
+  },
+] as const;
+
+const STOCK: StockSeed[] = [
+  {
+    sku: "PART-CAP",
+    reorder: 6,
+    supplier: "coolair",
+    supplierSku: "CAP-35-5-440",
+    target: { W: 8, J: 3, L: 1 },
+  },
+  {
+    sku: "FILTER-DUCT",
+    reorder: 10,
+    supplier: "coolair",
+    supplierSku: "RAF-600x400",
+    target: { W: 4, J: 2, L: 0 },
+  },
+  {
+    sku: "REGAS-R32",
+    reorder: 10,
+    supplier: "refgas",
+    supplierSku: "R32-9.5",
+    target: { W: 9.5, J: 3.2, L: 2.4 },
+  },
+  {
+    sku: "REGAS-R410A",
+    reorder: 10,
+    supplier: "refgas",
+    supplierSku: "R410A-10",
+    target: { W: 0, J: 2.6, L: 1.8 },
+  },
+  {
+    sku: "PART-DRAIN-PUMP",
+    reorder: 3,
+    supplier: "coolair",
+    supplierSku: "MINI-ORANGE",
+    target: { W: 2, J: 0, L: 0 },
+  },
+  {
+    sku: "ISOLATOR",
+    reorder: 6,
+    supplier: "sparkline",
+    supplierSku: "ISO-35A-2P",
+    target: { W: 10, J: 3, L: 2 },
+  },
+  {
+    sku: "BRACKET",
+    reorder: 4,
+    supplier: "coolair",
+    supplierSku: "WB-550-HD",
+    target: { W: 6, J: 1, L: 1 },
+  },
+  {
+    sku: "PIPE-EXT",
+    reorder: 20,
+    supplier: "coolair",
+    supplierSku: "PC-1/4-3/8-15",
+    target: { W: 45, J: 8, L: 6 },
+  },
+  {
+    sku: "COVER-DUCT",
+    reorder: 15,
+    supplier: "coolair",
+    supplierSku: "PD-75-2M",
+    target: { W: 24, J: 4, L: 3 },
+  },
+  {
+    sku: "PART-FAN-IN",
+    reorder: 1,
+    supplier: "coolair",
+    supplierSku: "FM-IN-UNI",
+    target: { W: 1, J: 0, L: 0 },
+  },
+  {
+    sku: "PART-FAN-OUT",
+    reorder: 1,
+    supplier: "coolair",
+    supplierSku: "FM-OUT-UNI",
+    target: { W: 0, J: 0, L: 0 },
+  },
+  {
+    sku: "PART-STAT",
+    reorder: 2,
+    supplier: "coolair",
+    supplierSku: "WC-UNI-WIRED",
+    target: { W: 3, J: 0, L: 0 },
+  },
+  {
+    sku: "ZONE-MOTOR",
+    reorder: 2,
+    supplier: "coolair",
+    supplierSku: "ZM-24V",
+    target: { W: 3, J: 1, L: 0 },
+  },
+  {
+    sku: "EVAP-PUMP",
+    reorder: 2,
+    supplier: "gasparts",
+    supplierSku: "EP-BREEZAIR",
+    target: { W: 2, J: 0, L: 1 },
+  },
+  {
+    sku: "GAS-IGNITER",
+    reorder: 3,
+    supplier: "gasparts",
+    supplierSku: "HSI-UNI",
+    target: { W: 2, J: 0, L: 1 },
+  },
+  {
+    sku: "GAS-FLAME-SENSOR",
+    reorder: 3,
+    supplier: "gasparts",
+    supplierSku: "FS-ROD",
+    target: { W: 3, J: 0, L: -1 },
+  },
+];
+
+interface StockEvent {
+  at: Date;
+  type: "RECEIVE" | "TRANSFER" | "ADJUST" | "JOB_USE";
+  sku: string;
+  qty: number;
+  from?: Loc;
+  to?: Loc;
+  reason?: string;
+  receipt?: string; // key into receipts
+  unitCostCents?: number;
+  jobId?: string;
+  jobLineItemId?: string;
+  userId: string;
+}
+
+async function seedInventory(users: {
+  admin: { id: string };
+  office: { id: string };
+  tech1: { id: string; name: string };
+  tech2: { id: string; name: string };
+}): Promise<{ items: number; movements: number; low: string[] }> {
+  const { admin, office, tech1, tech2 } = users;
+  const opening = startOfMelbourneDay(addMelbourneDays(NOW, -60));
+  const day = (offset: number, minutes: number) => at(offset, minutes);
+
+  const suppliers = new Map<string, string>();
+  for (const s of SUPPLIERS) {
+    const { key, ...data } = s;
+    const created = await prisma.supplier.create({
+      data: { ...data, createdAt: addMelbourneMonths(NOW, -14) },
+    });
+    suppliers.set(key, created.id);
+  }
+
+  const warehouse = await prisma.stockLocation.create({
+    data: { name: "Warehouse", type: "WAREHOUSE", createdAt: opening },
+  });
+  const vanJ = await prisma.stockLocation.create({
+    data: { name: `${tech1.name}'s van`, type: "VAN", userId: tech1.id, createdAt: opening },
+  });
+  const vanL = await prisma.stockLocation.create({
+    data: { name: `${tech2.name}'s van`, type: "VAN", userId: tech2.id, createdAt: opening },
+  });
+  const locId: Record<Loc, string> = { W: warehouse.id, J: vanJ.id, L: vanL.id };
+
+  const itemIds = new Map<string, string>();
+  for (const s of STOCK) {
+    const created = await prisma.inventoryItem.create({
+      data: {
+        priceBookItemId: pb(s.sku).id,
+        reorderLevel: s.reorder,
+        supplierId: suppliers.get(s.supplier) ?? null,
+        supplierSku: s.supplierSku,
+        createdAt: opening,
+      },
+    });
+    itemIds.set(s.sku, created.id);
+  }
+
+  // A flame sensor Liam fitted on his latest gas job without one in the van (shows negative stock).
+  const liamJob = await prisma.job.findFirst({
+    where: {
+      assignments: { some: { userId: tech2.id } },
+      status: { in: ["COMPLETED", "IN_PROGRESS"] },
+      deletedAt: null,
+      actualStart: { not: null },
+    },
+    orderBy: { actualStart: "desc" },
+  });
+  if (liamJob) {
+    const sensor = pb("GAS-FLAME-SENSOR");
+    const count = await prisma.jobLineItem.count({ where: { jobId: liamJob.id } });
+    await prisma.jobLineItem.create({
+      data: {
+        jobId: liamJob.id,
+        priceBookItemId: sensor.id,
+        type: "PART",
+        description: sensor.name,
+        quantity: 1,
+        unitPriceCents: sensor.priceCents,
+        unitCostCents: sensor.costCents,
+        sortOrder: count,
+        createdAt: liamJob.actualStart ?? NOW,
+      },
+    });
+  }
+
+  // Parts used on recent jobs come out of the first technician's van.
+  const usedLines = await prisma.jobLineItem.findMany({
+    where: {
+      priceBookItem: { sku: { in: STOCK.map((s) => s.sku) } },
+      job: {
+        deletedAt: null,
+        status: { in: ["COMPLETED", "INVOICED", "IN_PROGRESS"] },
+        actualStart: { gte: addMelbourneDays(opening, 2) },
+      },
+    },
+    include: {
+      priceBookItem: { select: { sku: true } },
+      job: {
+        select: {
+          id: true,
+          actualStart: true,
+          actualEnd: true,
+          assignments: { select: { userId: true }, orderBy: { createdAt: "asc" } },
+        },
+      },
+    },
+  });
+
+  const receipts = {
+    coolair1: {
+      supplier: "coolair",
+      at: day(-31, 9 * 60 + 40),
+      reference: "INV-448812",
+      by: office.id,
+    },
+    refgas1: {
+      supplier: "refgas",
+      at: day(-24, 8 * 60 + 15),
+      reference: "DN-20931",
+      by: office.id,
+    },
+    sparkline1: {
+      supplier: "sparkline",
+      at: day(-17, 7 * 60 + 5),
+      reference: "C-118204",
+      by: admin.id,
+    },
+    gas1: { supplier: "gasparts", at: day(-12, 11 * 60), reference: "SGP-7781", by: office.id },
+    coolair2: {
+      supplier: "coolair",
+      at: day(-5, 9 * 60 + 25),
+      reference: "INV-451067",
+      by: office.id,
+    },
+  } as const;
+  type ReceiptKey = keyof typeof receipts;
+  const rcv = (key: ReceiptKey, sku: string, qty: number, cost?: number): StockEvent => ({
+    at: receipts[key].at,
+    type: "RECEIVE",
+    sku,
+    qty,
+    to: "W",
+    receipt: key,
+    unitCostCents: cost ?? pb(sku).costCents,
+    userId: receipts[key].by,
+  });
+  const move = (
+    offset: number,
+    to: Loc,
+    sku: string,
+    qty: number,
+    from: Loc = "W",
+  ): StockEvent => ({
+    at: day(offset, 7 * 60 + 10),
+    type: "TRANSFER",
+    sku,
+    qty,
+    from,
+    to,
+    reason: to === "W" ? "Back to warehouse" : "Van restock",
+    userId: office.id,
+  });
+
+  const events: StockEvent[] = [
+    rcv("coolair1", "PART-CAP", 6, 1750),
+    rcv("coolair1", "FILTER-DUCT", 6),
+    rcv("coolair1", "BRACKET", 6),
+    rcv("coolair1", "PIPE-EXT", 30),
+    rcv("coolair1", "COVER-DUCT", 20),
+    rcv("refgas1", "REGAS-R32", 9.5),
+    rcv("sparkline1", "ISOLATOR", 10),
+    rcv("gas1", "GAS-IGNITER", 3),
+    rcv("gas1", "GAS-FLAME-SENSOR", 3),
+    rcv("gas1", "EVAP-PUMP", 2),
+    rcv("coolair2", "PART-CAP", 4, 1800),
+    rcv("coolair2", "ZONE-MOTOR", 2),
+    rcv("coolair2", "PART-STAT", 2),
+    move(-30, "J", "PART-CAP", 2),
+    move(-30, "L", "PART-CAP", 1),
+    move(-30, "J", "FILTER-DUCT", 4),
+    move(-30, "J", "PIPE-EXT", 10),
+    move(-30, "L", "PIPE-EXT", 6),
+    move(-30, "J", "BRACKET", 1),
+    move(-23, "J", "REGAS-R410A", 2.6),
+    move(-23, "L", "REGAS-R410A", 1.8),
+    move(-23, "J", "REGAS-R32", 3),
+    move(-23, "L", "REGAS-R32", 2.4),
+    move(-16, "J", "ISOLATOR", 3),
+    move(-16, "L", "ISOLATOR", 2),
+    move(-11, "L", "GAS-IGNITER", 1),
+    move(-11, "L", "EVAP-PUMP", 1),
+    move(-4, "J", "PART-CAP", 1),
+    move(-4, "J", "COVER-DUCT", 4),
+    move(-4, "L", "COVER-DUCT", 3),
+    move(-2, "W", "ZONE-MOTOR", 1, "L"),
+    {
+      at: day(-3, 16 * 60 + 30),
+      type: "ADJUST",
+      sku: "FILTER-DUCT",
+      qty: 1,
+      from: "J",
+      reason: "Damaged / faulty: crushed in the van",
+      userId: office.id,
+    },
+    {
+      at: day(-9, 15 * 60),
+      type: "ADJUST",
+      sku: "REGAS-R410A",
+      qty: 0.4,
+      from: "W",
+      reason: "Stocktake count: cylinder weighed 9.6 kg",
+      userId: admin.id,
+    },
+  ];
+  for (const l of usedLines) {
+    const sku = l.priceBookItem!.sku!;
+    const first = l.job.assignments[0]?.userId;
+    const loc: Loc = first === tech1.id ? "J" : first === tech2.id ? "L" : "W";
+    events.push({
+      at: l.job.actualEnd ?? l.job.actualStart ?? NOW,
+      type: "JOB_USE",
+      sku,
+      qty: Number(l.quantity),
+      from: loc,
+      jobId: l.job.id,
+      jobLineItemId: l.id,
+      unitCostCents: l.unitCostCents,
+      userId: first ?? office.id,
+    });
+  }
+
+  // Work the opening stocktake back from the target quantities.
+  const net = new Map<string, number>();
+  const bump = (sku: string, loc: Loc, delta: number) =>
+    net.set(`${sku}:${loc}`, addQty(net.get(`${sku}:${loc}`) ?? 0, delta));
+  for (const e of events) {
+    if (e.from) bump(e.sku, e.from, -e.qty);
+    if (e.to) bump(e.sku, e.to, e.qty);
+  }
+  const openingEvents: StockEvent[] = [];
+  for (const s of STOCK) {
+    for (const loc of ["W", "J", "L"] as Loc[]) {
+      const qty = Math.max(0, addQty(s.target[loc], -(net.get(`${s.sku}:${loc}`) ?? 0)));
+      if (qty > 0)
+        openingEvents.push({
+          at: addMinutes(opening, 8 * 60),
+          type: "ADJUST",
+          sku: s.sku,
+          qty,
+          to: loc,
+          reason: "Stocktake count: opening balance",
+          userId: admin.id,
+        });
+    }
+  }
+  const all = [...openingEvents, ...events].sort((a, b) => a.at.getTime() - b.at.getTime());
+
+  const receiptIds = new Map<string, string>();
+  for (const [key, r] of Object.entries(receipts)) {
+    const lines = events.filter((e) => e.receipt === key);
+    const created = await prisma.stockReceipt.create({
+      data: {
+        supplierId: suppliers.get(r.supplier) ?? null,
+        locationId: warehouse.id,
+        reference: r.reference,
+        totalCostCents: lines.reduce((s, e) => s + Math.round(e.qty * (e.unitCostCents ?? 0)), 0),
+        receivedAt: r.at,
+        userId: r.by,
+        createdAt: r.at,
+      },
+    });
+    receiptIds.set(key, created.id);
+  }
+
+  const movements: Prisma.StockMovementCreateManyInput[] = all.map((e) => ({
+    inventoryItemId: itemIds.get(e.sku)!,
+    type: e.type,
+    quantity: e.qty,
+    fromLocationId: e.from ? locId[e.from] : null,
+    toLocationId: e.to ? locId[e.to] : null,
+    unitCostCents: e.unitCostCents ?? null,
+    reason: e.reason ?? (e.receipt ? `Ref ${receipts[e.receipt as ReceiptKey].reference}` : null),
+    jobId: e.jobId ?? null,
+    jobLineItemId: e.jobLineItemId ?? null,
+    receiptId: e.receipt ? receiptIds.get(e.receipt)! : null,
+    userId: e.userId,
+    createdAt: e.at,
+    updatedAt: e.at,
+  }));
+  await prisma.stockMovement.createMany({ data: movements });
+
+  // Levels are rebuilt from the ledger, exactly as the app keeps them.
+  const levels = levelsFromMovements(
+    movements.map((m) => ({
+      inventoryItemId: m.inventoryItemId,
+      type: m.type,
+      quantity: Number(m.quantity),
+      fromLocationId: m.fromLocationId ?? null,
+      toLocationId: m.toLocationId ?? null,
+    })),
+  );
+  await prisma.stockLevel.createMany({
+    data: [...levels.entries()].map(([key, quantity]) => {
+      const [inventoryItemId, locationId] = key.split(":");
+      return { inventoryItemId, locationId, quantity };
+    }),
+  });
+
+  const low: string[] = [];
+  for (const s of STOCK) {
+    const id = itemIds.get(s.sku)!;
+    const total = addQty(
+      ...(["W", "J", "L"] as Loc[]).map((l) => levels.get(`${id}:${locId[l]}`) ?? 0),
+    );
+    if (stockStatus(total, s.reorder) !== "OK") low.push(pb(s.sku).name);
+    for (const l of ["W", "J", "L"] as Loc[]) {
+      const actual = levels.get(`${id}:${locId[l]}`) ?? 0;
+      if (actual !== s.target[l])
+        console.warn(`Stock for ${s.sku} at ${l} is ${actual} (wanted ${s.target[l]})`);
+    }
+  }
+  return { items: STOCK.length, movements: movements.length, low };
 }
 
 // ─── Seed ───────────────────────────────────────────────────────────────────
@@ -4256,6 +4766,9 @@ async function main(): Promise<void> {
 
   await prisma.activity.createMany({ data: activities });
 
+  // ── Inventory: suppliers, warehouse + vans, stock history and job usage ──
+  const inventory = await seedInventory({ admin, office, tech1, tech2 });
+
   // ── Notifications ──
   const newestWebLead = [...leadRecords].reverse().find((l) => l.spec.status === "NEW");
   const acceptedQuote = [...quoteRecords]
@@ -4264,6 +4777,15 @@ async function main(): Promise<void> {
   const lastPaid = paidInvoiceNotices.sort((a, b) => b.at.getTime() - a.at.getTime())[0];
   const notifications: Prisma.NotificationCreateManyInput[] = [];
   for (const userId of [admin.id, office.id]) {
+    if (inventory.low[0]) {
+      notifications.push({
+        userId,
+        title: `Low stock: ${inventory.low[0]}`,
+        body: `Below its reorder level. ${inventory.low.length} parts need ordering.`,
+        link: "/inventory?view=low",
+        createdAt: addMinutes(NOW, -60 * 26),
+      });
+    }
     if (newestWebLead) {
       notifications.push({
         userId,
@@ -4356,6 +4878,9 @@ async function main(): Promise<void> {
     invoices: invoiceNo,
     payments: paymentCount,
     maintenancePlans: plans.length,
+    stockedParts: inventory.items,
+    stockMovements: inventory.movements,
+    lowStock: inventory.low.length,
   };
   console.log("\nSeed complete in", ((Date.now() - started) / 1000).toFixed(1), "s");
   console.table(counts);

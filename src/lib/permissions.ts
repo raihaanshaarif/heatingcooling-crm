@@ -16,6 +16,9 @@ export type Resource =
   | "maintenance"
   | "priceBook"
   | "priceBookCosts"
+  | "inventory"
+  | "inventoryCosts"
+  | "suppliers"
   | "reports"
   | "team"
   | "users"
@@ -37,7 +40,8 @@ type Matrix = Record<Role, Partial<Record<Resource, readonly Action[]>>>;
 /**
  * Central permission matrix. ADMIN can do everything. OFFICE runs the day to day
  * but cannot manage users, settings, or see costs/margins. TECHNICIAN only works
- * on jobs assigned to them (ownership is checked with canAccessJob).
+ * on jobs assigned to them (ownership is checked with canAccessJob) and can only see
+ * their own van's stock (from My jobs, read-only).
  */
 export const PERMISSIONS: Matrix = {
   ADMIN: {
@@ -54,6 +58,9 @@ export const PERMISSIONS: Matrix = {
     maintenance: ALL,
     priceBook: ALL,
     priceBookCosts: ALL,
+    inventory: ALL,
+    inventoryCosts: ALL,
+    suppliers: ALL,
     reports: ALL,
     team: ALL,
     users: ALL,
@@ -75,6 +82,8 @@ export const PERMISSIONS: Matrix = {
     payments: ALL,
     maintenance: ALL,
     priceBook: READ,
+    inventory: ["view", "create", "update"], // see and move stock; no costs or stock value
+    suppliers: ["view", "create", "update"],
     reports: READ,
     team: READ,
     notifications: ALL,
@@ -138,6 +147,8 @@ export const ROUTE_RESOURCES: { prefix: string; resource: Resource }[] = [
   { prefix: "/payments", resource: "payments" },
   { prefix: "/maintenance", resource: "maintenance" },
   { prefix: "/price-book", resource: "priceBook" },
+  { prefix: "/inventory", resource: "inventory" },
+  { prefix: "/suppliers", resource: "suppliers" },
   { prefix: "/reports", resource: "reports" },
   { prefix: "/team", resource: "team" },
   { prefix: "/settings", resource: "settings" },

@@ -156,6 +156,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
                 showCosts={showCosts}
                 gstRegistered={settings.gstRegistered}
                 readOnly={job.status === "INVOICED"}
+                canMoveStock={can(user, "create", "inventory")}
               />
             </CardContent>
           </Card>

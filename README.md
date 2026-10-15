@@ -31,14 +31,14 @@ Technicians land on **My Jobs**, a phone-first view with big _On my way / Start 
 
 ## Scripts
 
-| Command                                                                | What it does                                                                                     |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `pnpm dev` / `build` / `start`                                         | Next.js                                                                                          |
-| `pnpm lint`                                                            | ESLint, zero warnings allowed                                                                    |
-| `pnpm typecheck`                                                       | `tsc --noEmit`                                                                                   |
-| `pnpm test`                                                            | Vitest: money/GST, numbering, permissions, invoice status, dates, rate limiting, lead validation |
-| `pnpm format`                                                          | Prettier                                                                                         |
-| `pnpm db:migrate` / `db:deploy` / `db:seed` / `db:reset` / `db:studio` | Prisma                                                                                           |
+| Command                                                                | What it does                                                                                                  |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev` / `build` / `start`                                         | Next.js                                                                                                       |
+| `pnpm lint`                                                            | ESLint, zero warnings allowed                                                                                 |
+| `pnpm typecheck`                                                       | `tsc --noEmit`                                                                                                |
+| `pnpm test`                                                            | Vitest: money/GST, numbering, permissions, invoice status, dates, rate limiting, lead validation, stock logic |
+| `pnpm format`                                                          | Prettier                                                                                                      |
+| `pnpm db:migrate` / `db:deploy` / `db:seed` / `db:reset` / `db:studio` | Prisma                                                                                                        |
 
 ## Website enquiry form → leads
 
@@ -70,6 +70,20 @@ curl -X POST http://localhost:3000/api/leads/webhook \
 - **Several websites?** Point every site's form at the same URL with the same key and send `site` with that website's name. The lead shows which site it came from on the Leads board and table. If `site` is left out and the form posts from the browser, the site's domain is taken from the request automatically.
 - Leave a hidden `website` field empty in your form: bots fill it in and are silently ignored.
 - Limited to 10 requests per minute per IP. To post straight from the browser, list your site in `LEAD_WEBHOOK_ALLOWED_ORIGINS` (comma separated). Posting from your server (a WordPress / Webflow form handler) keeps the key private and is better.
+
+## Inventory and van stock
+
+Stock of common parts (capacitors, filters, refrigerant in kg, drain pumps, isolators, brackets…) is tracked per location: the **warehouse** plus **one van per technician**. Vans are created automatically for every active technician (and deactivated, not deleted, when someone leaves).
+
+- **Inventory** (Admin menu) shows stock by location with filters, a **Low stock** view (total across all locations below the item's reorder level, with a suggested order quantity) and the **Movements** history. **Export CSV** downloads stock levels (all locations or the one you've picked).
+- Every change is a row in the stock ledger (`StockMovement`: received, transfer, adjustment, used on job, returned from job) written in the same database transaction as the stock level, so quantities are always explained by the history. Logic lives in `src/lib/inventory.ts` (tested) and `src/server/inventory/service.ts`.
+- **Parts used on jobs are deducted automatically.** When a tracked price book part is added under _Labour & parts_ (office job page) or _Parts & labour used_ (technician My jobs), it comes out of the van of the technician adding it, else the first assigned technician's van, else the warehouse. Removing the line puts it back where it came from. Lines copied from an accepted quote are not deducted until the office clicks **Take from stock** on the line. Stock may go negative; it's flagged in red everywhere and the office should recount or restock.
+- **Receive stock** records a supplier delivery (supplier, docket number, items, quantities, cost) into the warehouse or a van, and can update the price book cost price (admin).
+- **Low stock alert**: when an item's total first drops below its reorder level, admin and office get a notification, and the dashboard shows a _Low stock_ tile.
+- **Suppliers** (Admin menu): add, edit, deactivate.
+- Permissions: technicians see only their own van (read-only, _My jobs → My van stock_); office can view, receive, transfer and adjust stock and manage suppliers; only admin sees costs and stock value, and can stop tracking items or delete suppliers.
+
+No environment variables are needed.
 
 ## How the money works
 
@@ -114,7 +128,7 @@ Coolify builds and runs the container itself with Nixpacks, so the repo has no D
 ```
 prisma/              schema (all phases), migrations, seed
 src/app/(auth)       login
-src/app/(app)        the staff app (dashboard, leads, clients, quotes, jobs, schedule, my-jobs, invoices, payments, maintenance, reports, team, settings, audit log)
+src/app/(app)        the staff app (dashboard, leads, clients, quotes, jobs, schedule, my-jobs, invoices, payments, maintenance, inventory, suppliers, reports, team, settings, audit log)
 src/app/(public)     client-facing quote (/q/[token]) and invoice (/i/[token]) pages
 src/app/api          auth, lead webhook, PDFs, report CSVs, Xero export, cron, file serving
 src/server/<module>  queries.ts (reads) and actions.ts (server actions: Zod validation, permission check, transaction, audit log, activity)
@@ -131,5 +145,4 @@ The database schema already covers these; code entry points are marked `TODO(Pha
 
 - **SMS** (Twilio or MessageMedia): on-my-way and reminder texts. `src/lib/sms`.
 - **Xero / MYOB sync**: a Xero import CSV works today (`/api/export/xero`); live API sync is Phase 3. `src/lib/integrations/accounting.ts`.
-- **Inventory & van stock**: `Supplier` and `InventoryItem` tables exist.
 - **Google Calendar sync** for technicians. `src/lib/integrations/google-calendar.ts`.
