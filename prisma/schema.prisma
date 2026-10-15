@@ -1,0 +1,1003 @@
+// CoolOps database schema. Covers Phase 1, 2 and 3 so later phases need no breaking migrations.
+// Money is always stored as integer cents (AUD). Dates are stored in UTC and shown in Australia/Melbourne.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  OFFICE
+  TECHNICIAN
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  SITE_VISIT_BOOKED
+  QUOTED
+  WON
+  LOST
+}
+
+enum LeadSource {
+  WEBSITE
+  PHONE
+  GOOGLE_ADS
+  GOOGLE_BUSINESS_PROFILE
+  FACEBOOK
+  INSTAGRAM
+  REFERRAL
+  REPEAT_CUSTOMER
+  WALK_IN
+  OTHER
+}
+
+enum ServiceCategory {
+  SPLIT_SYSTEM
+  DUCTED
+  EVAPORATIVE
+  GAS_HEATING
+  HEAT_PUMP
+  COMMERCIAL_HVAC
+  EMERGENCY_REPAIR
+  MAINTENANCE
+  OTHER
+}
+
+enum ClientType {
+  RESIDENTIAL
+  COMMERCIAL
+  PROPERTY_MANAGER
+  BUILDER
+}
+
+enum EquipmentType {
+  SPLIT_SYSTEM
+  MULTI_SPLIT
+  DUCTED_REFRIGERATED
+  DUCTED_GAS_HEATER
+  EVAPORATIVE_COOLER
+  HYDRONIC
+  WALL_FURNACE
+  HEAT_PUMP
+  OTHER
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  VIEWED
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
+enum JobType {
+  INSTALLATION
+  SERVICE
+  REPAIR
+  EMERGENCY
+  INSPECTION
+  WARRANTY
+  QUOTE_VISIT
+}
+
+enum JobStatus {
+  UNSCHEDULED
+  SCHEDULED
+  EN_ROUTE
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+  INVOICED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  NORMAL
+  HIGH
+  EMERGENCY
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  VOID
+}
+
+enum PaymentMethod {
+  CARD
+  STRIPE
+  BANK_TRANSFER
+  CASH
+  CHEQUE
+  OTHER
+}
+
+enum PlanFrequency {
+  MONTHLY
+  QUARTERLY
+  SIX_MONTHLY
+  YEARLY
+}
+
+enum ItemType {
+  LABOUR
+  PART
+  EQUIPMENT
+  CALL_OUT
+  OTHER
+}
+
+enum LicenceType {
+  ARC_REFRIGERANT
+  ELECTRICAL
+  GAS_FITTING
+  PLUMBING
+  DRIVERS
+  WWCC
+  OTHER
+}
+
+enum ActivityType {
+  NOTE
+  CALL
+  EMAIL
+  SMS
+  STATUS_CHANGE
+  SYSTEM
+}
+
+enum EntityType {
+  LEAD
+  CLIENT
+  PROPERTY
+  EQUIPMENT
+  QUOTE
+  JOB
+  INVOICE
+  PAYMENT
+  CREDIT_NOTE
+  MAINTENANCE_PLAN
+  PRICE_BOOK_ITEM
+  USER
+  LICENCE
+  SETTINGS
+  CHECKLIST_TEMPLATE
+}
+
+enum AttachmentKind {
+  BEFORE
+  AFTER
+  DOCUMENT
+  SIGNATURE
+  PHOTO
+  LOGO
+}
+
+enum ReminderType {
+  SERVICE_DUE
+  INVOICE_OVERDUE
+  QUOTE_FOLLOW_UP
+  LICENCE_EXPIRY
+  WARRANTY_EXPIRY
+}
+
+enum ReminderChannel {
+  EMAIL
+  SMS
+  IN_APP
+}
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+enum PaymentTerms {
+  ON_COMPLETION
+  DAYS_7
+  DAYS_14
+  DAYS_30
+}
+
+// ─── Auth ────────────────────────────────────────────────────────────────────
+
+model User {
+  id              String    @id @default(cuid())
+  name            String
+  email           String    @unique
+  emailVerified   DateTime?
+  image           String?
+  passwordHash    String?
+  role            Role      @default(TECHNICIAN)
+  phone           String?
+  color           String    @default("#2563eb")
+  hourlyCostCents Int       @default(0)
+  active          Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  accounts         Account[]
+  sessions         Session[]
+  licences         TechnicianLicence[]
+  assignedLeads    Lead[]              @relation("LeadAssignee")
+  jobAssignments   JobAssignment[]
+  timeEntries      TimeEntry[]
+  activities       Activity[]
+  attachments      Attachment[]
+  paymentsRecorded Payment[]
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+
+  @@index([role, active])
+}
+
+model Account {
+  id                String   @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?  @db.Text
+  access_token      String?  @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?  @db.Text
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model TechnicianLicence {
+  id        String      @id @default(cuid())
+  userId    String
+  type      LicenceType
+  number    String
+  issuedAt  DateTime?
+  expiresAt DateTime?
+  fileUrl   String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ─── Clients ─────────────────────────────────────────────────────────────────
+
+model Client {
+  id              String      @id @default(cuid())
+  type            ClientType  @default(RESIDENTIAL)
+  name            String
+  companyName     String?
+  abn             String?
+  email           String?
+  phone           String?
+  altPhone        String?
+  billingLine1    String?
+  billingLine2    String?
+  billingSuburb   String?
+  billingState    String      @default("VIC")
+  billingPostcode String?
+  notes           String?
+  tags            String[]    @default([])
+  source          LeadSource?
+  doNotService    Boolean     @default(false)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  deletedAt       DateTime?
+
+  contacts         Contact[]
+  properties       Property[]
+  leads            Lead[]
+  quotes           Quote[]
+  jobs             Job[]
+  invoices         Invoice[]
+  payments         Payment[]
+  maintenancePlans MaintenancePlan[]
+
+  @@index([name])
+  @@index([email])
+  @@index([phone])
+  @@index([deletedAt])
+}
+
+model Contact {
+  id        String   @id @default(cuid())
+  clientId  String
+  name      String
+  role      String?
+  phone     String?
+  email     String?
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+}
+
+model Property {
+  id           String   @id @default(cuid())
+  clientId     String
+  label        String?
+  addressLine1 String
+  addressLine2 String?
+  suburb       String
+  state        String   @default("VIC")
+  postcode     String
+  lat          Float?
+  lng          Float?
+  accessNotes  String?
+  parkingNotes String?
+  petNotes     String?
+  keyInfo      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  client           Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  equipment        Equipment[]
+  quotes           Quote[]
+  jobs             Job[]
+  invoices         Invoice[]
+  maintenancePlans MaintenancePlan[]
+
+  @@index([clientId])
+  @@index([suburb])
+}
+
+model Equipment {
+  id                String        @id @default(cuid())
+  propertyId        String
+  type              EquipmentType
+  brand             String
+  model             String?
+  serialNumber      String?
+  indoorModel       String?
+  outdoorModel      String?
+  capacityKw        Decimal?      @db.Decimal(6, 2)
+  refrigerant       String?
+  location          String?
+  installDate       DateTime?
+  installedByUs     Boolean       @default(false)
+  warrantyExpiresAt DateTime?
+  notes             String?
+  photos            String[]      @default([])
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  property Property                   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  jobs     JobEquipment[]
+  plans    MaintenancePlanEquipment[]
+
+  @@index([propertyId])
+  @@index([brand])
+  @@index([type])
+  @@index([warrantyExpiresAt])
+}
+
+// ─── Leads and activity ─────────────────────────────────────────────────────
+
+model Lead {
+  id                  String           @id @default(cuid())
+  leadNumber          Int              @unique @default(autoincrement())
+  status              LeadStatus       @default(NEW)
+  source              LeadSource       @default(OTHER)
+  sourceDetail        String?
+  serviceCategory     ServiceCategory?
+  brand               String?
+  name                String
+  email               String?
+  phone               String?
+  suburb              String?
+  postcode            String?
+  message             String?
+  urgency             Priority         @default(NORMAL)
+  estimatedValueCents Int?
+  assignedToId        String?
+  clientId            String?
+  lostReason          String?
+  followUpAt          DateTime?
+  utmSource           String?
+  utmMedium           String?
+  utmCampaign         String?
+  gclid               String?
+  convertedAt         DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  deletedAt           DateTime?
+
+  assignedTo User?   @relation("LeadAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  client     Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  quotes     Quote[]
+
+  @@index([status])
+  @@index([source])
+  @@index([createdAt])
+  @@index([email])
+  @@index([phone])
+  @@index([deletedAt])
+}
+
+model Activity {
+  id         String       @id @default(cuid())
+  entityType EntityType
+  entityId   String
+  type       ActivityType @default(NOTE)
+  body       String
+  userId     String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId, createdAt])
+}
+
+// ─── Price book ──────────────────────────────────────────────────────────────
+
+model PriceBookItem {
+  id          String          @id @default(cuid())
+  sku         String?         @unique
+  name        String
+  description String?
+  type        ItemType        @default(PART)
+  category    ServiceCategory @default(OTHER)
+  unit        String          @default("each")
+  costCents   Int             @default(0)
+  priceCents  Int             @default(0) // ex GST
+  taxable     Boolean         @default(true)
+  active      Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  quoteLines     QuoteLineItem[]
+  jobLines       JobLineItem[]
+  inventoryItems InventoryItem[]
+
+  @@index([type, category])
+  @@index([active])
+}
+
+// ─── Quotes ──────────────────────────────────────────────────────────────────
+
+model Quote {
+  id               String      @id @default(cuid())
+  number           String      @unique
+  clientId         String
+  propertyId       String?
+  leadId           String?
+  status           QuoteStatus @default(DRAFT)
+  title            String
+  intro            String?
+  terms            String?
+  validUntil       DateTime?
+  subtotalCents    Int         @default(0)
+  gstCents         Int         @default(0)
+  totalCents       Int         @default(0)
+  sentAt           DateTime?
+  viewedAt         DateTime?
+  acceptedAt       DateTime?
+  declinedAt       DateTime?
+  publicToken      String      @unique @default(cuid())
+  selectedOptionId String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  deletedAt        DateTime?
+
+  client   Client        @relation(fields: [clientId], references: [id])
+  property Property?     @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  lead     Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  options  QuoteOption[]
+  jobs     Job[]
+
+  @@index([clientId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([deletedAt])
+}
+
+model QuoteOption {
+  id            String   @id @default(cuid())
+  quoteId       String
+  name          String
+  description   String?
+  sortOrder     Int      @default(0)
+  subtotalCents Int      @default(0)
+  gstCents      Int      @default(0)
+  totalCents    Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  quote     Quote           @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  lineItems QuoteLineItem[]
+
+  @@index([quoteId])
+}
+
+model QuoteLineItem {
+  id              String   @id @default(cuid())
+  quoteOptionId   String
+  priceBookItemId String?
+  description     String
+  quantity        Decimal  @default(1) @db.Decimal(10, 2)
+  unitPriceCents  Int
+  taxable         Boolean  @default(true)
+  totalCents      Int
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  option        QuoteOption    @relation(fields: [quoteOptionId], references: [id], onDelete: Cascade)
+  priceBookItem PriceBookItem? @relation(fields: [priceBookItemId], references: [id], onDelete: SetNull)
+
+  @@index([quoteOptionId])
+}
+
+// ─── Jobs ────────────────────────────────────────────────────────────────────
+
+model Job {
+  id                      String           @id @default(cuid())
+  number                  String           @unique
+  clientId                String
+  propertyId              String?
+  quoteId                 String?
+  maintenancePlanId       String?
+  type                    JobType          @default(SERVICE)
+  status                  JobStatus        @default(UNSCHEDULED)
+  priority                Priority         @default(NORMAL)
+  serviceCategory         ServiceCategory?
+  title                   String
+  description             String?
+  scheduledStart          DateTime?
+  scheduledEnd            DateTime?
+  estimatedMinutes        Int?
+  actualStart             DateTime?
+  actualEnd               DateTime?
+  enRouteAt               DateTime?
+  completionNotes         String?
+  customerSignatureUrl    String?
+  signedByName            String?
+  refrigerantRecoveredKg  Decimal?         @db.Decimal(6, 2)
+  refrigerantAddedKg      Decimal?         @db.Decimal(6, 2)
+  gasComplianceCertNumber String?
+  onHoldReason            String?
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+  deletedAt               DateTime?
+
+  client          Client             @relation(fields: [clientId], references: [id])
+  property        Property?          @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  quote           Quote?             @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  maintenancePlan MaintenancePlan?   @relation(fields: [maintenancePlanId], references: [id], onDelete: SetNull)
+  assignments     JobAssignment[]
+  equipment       JobEquipment[]
+  checklistItems  JobChecklistItem[]
+  lineItems       JobLineItem[]
+  timeEntries     TimeEntry[]
+  invoices        Invoice[]
+
+  @@index([clientId])
+  @@index([status])
+  @@index([scheduledStart])
+  @@index([deletedAt])
+}
+
+model JobAssignment {
+  id        String   @id @default(cuid())
+  jobId     String
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  job  Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, userId])
+  @@index([userId])
+}
+
+model JobEquipment {
+  id          String   @id @default(cuid())
+  jobId       String
+  equipmentId String
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  job       Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  equipment Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, equipmentId])
+  @@index([equipmentId])
+}
+
+model JobChecklistTemplate {
+  id              String           @id @default(cuid())
+  name            String
+  jobType         JobType?
+  serviceCategory ServiceCategory?
+  items           Json // string[] of checklist labels
+  active          Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([jobType, serviceCategory])
+}
+
+model JobChecklistItem {
+  id        String   @id @default(cuid())
+  jobId     String
+  label     String
+  checked   Boolean  @default(false)
+  note      String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+}
+
+model JobLineItem {
+  id              String   @id @default(cuid())
+  jobId           String
+  priceBookItemId String?
+  type            ItemType @default(PART)
+  description     String
+  quantity        Decimal  @default(1) @db.Decimal(10, 2)
+  unitPriceCents  Int
+  unitCostCents   Int      @default(0)
+  taxable         Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  job           Job            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  priceBookItem PriceBookItem? @relation(fields: [priceBookItemId], references: [id], onDelete: SetNull)
+
+  @@index([jobId])
+}
+
+model TimeEntry {
+  id        String    @id @default(cuid())
+  jobId     String
+  userId    String
+  startedAt DateTime
+  endedAt   DateTime?
+  minutes   Int?
+  note      String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  job  Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([userId, startedAt])
+}
+
+model Attachment {
+  id           String         @id @default(cuid())
+  entityType   EntityType
+  entityId     String
+  url          String
+  storageKey   String?
+  fileName     String
+  mimeType     String
+  size         Int
+  caption      String?
+  kind         AttachmentKind @default(DOCUMENT)
+  uploadedById String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  uploadedBy User? @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+}
+
+// ─── Billing ─────────────────────────────────────────────────────────────────
+
+model Invoice {
+  id                   String        @id @default(cuid())
+  number               String        @unique
+  clientId             String
+  propertyId           String?
+  jobId                String?
+  status               InvoiceStatus @default(DRAFT)
+  issueDate            DateTime      @default(now())
+  dueDate              DateTime
+  paymentTerms         PaymentTerms  @default(DAYS_14)
+  subtotalCents        Int           @default(0)
+  gstCents             Int           @default(0)
+  totalCents           Int           @default(0)
+  amountPaidCents      Int           @default(0)
+  creditedCents        Int           @default(0)
+  balanceCents         Int           @default(0)
+  notes                String?
+  sentAt               DateTime?
+  paidAt               DateTime?
+  voidedAt             DateTime?
+  publicToken          String        @unique @default(cuid())
+  stripePaymentLinkUrl String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  deletedAt            DateTime?
+
+  client      Client            @relation(fields: [clientId], references: [id])
+  property    Property?         @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  job         Job?              @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  lineItems   InvoiceLineItem[]
+  payments    Payment[]
+  creditNotes CreditNote[]
+
+  @@index([clientId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([issueDate])
+  @@index([deletedAt])
+}
+
+model InvoiceLineItem {
+  id             String   @id @default(cuid())
+  invoiceId      String
+  description    String
+  quantity       Decimal  @default(1) @db.Decimal(10, 2)
+  unitPriceCents Int
+  unitCostCents  Int      @default(0)
+  taxable        Boolean  @default(true)
+  totalCents     Int
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
+model Payment {
+  id                    String        @id @default(cuid())
+  invoiceId             String
+  clientId              String
+  amountCents           Int // negative for refunds
+  method                PaymentMethod
+  reference             String?
+  paidAt                DateTime
+  notes                 String?
+  stripePaymentIntentId String?       @unique
+  recordedById          String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  invoice    Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  client     Client  @relation(fields: [clientId], references: [id])
+  recordedBy User?   @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@index([invoiceId])
+  @@index([clientId])
+  @@index([paidAt])
+}
+
+model CreditNote {
+  id          String   @id @default(cuid())
+  number      String   @unique
+  invoiceId   String
+  amountCents Int
+  reason      String
+  issuedAt    DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
+// ─── Maintenance ─────────────────────────────────────────────────────────────
+
+model MaintenancePlan {
+  id          String        @id @default(cuid())
+  clientId    String
+  propertyId  String?
+  name        String
+  frequency   PlanFrequency @default(YEARLY)
+  priceCents  Int           @default(0)
+  startDate   DateTime
+  nextDueDate DateTime
+  active      Boolean       @default(true)
+  notes       String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  client    Client                     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  property  Property?                  @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  equipment MaintenancePlanEquipment[]
+  jobs      Job[]
+
+  @@index([clientId])
+  @@index([nextDueDate, active])
+}
+
+model MaintenancePlanEquipment {
+  id          String   @id @default(cuid())
+  planId      String
+  equipmentId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  plan      MaintenancePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  equipment Equipment       @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, equipmentId])
+}
+
+model Reminder {
+  id         String          @id @default(cuid())
+  type       ReminderType
+  entityType EntityType
+  entityId   String
+  key        String          @unique // dedupe key, e.g. "INVOICE_OVERDUE:<id>:7"
+  dueAt      DateTime
+  sentAt     DateTime?
+  channel    ReminderChannel @default(EMAIL)
+  status     ReminderStatus  @default(PENDING)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@index([type, status, dueAt])
+  @@index([entityType, entityId])
+}
+
+// ─── Inventory (Phase 3) ────────────────────────────────────────────────────
+
+model Supplier {
+  id            String   @id @default(cuid())
+  name          String
+  contact       String?
+  phone         String?
+  email         String?
+  accountNumber String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  inventoryItems InventoryItem[]
+}
+
+model InventoryItem {
+  id              String   @id @default(cuid())
+  priceBookItemId String
+  quantityOnHand  Decimal  @default(0) @db.Decimal(10, 2)
+  reorderLevel    Decimal  @default(0) @db.Decimal(10, 2)
+  supplierId      String?
+  location        String? // "WAREHOUSE" or a van / technician id (Phase 3 van stock)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  priceBookItem PriceBookItem @relation(fields: [priceBookItemId], references: [id], onDelete: Cascade)
+  supplier      Supplier?     @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  @@index([priceBookItemId])
+}
+
+// ─── System ──────────────────────────────────────────────────────────────────
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String
+  body      String?
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+}
+
+model AuditLog {
+  id         String     @id @default(cuid())
+  userId     String?
+  action     String // CREATE / UPDATE / DELETE / STATUS / LOGIN ...
+  entityType EntityType
+  entityId   String
+  changes    Json?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model BusinessSettings {
+  id                      String       @id @default("singleton")
+  businessName            String       @default("Cooling Service Melbourne")
+  tradingName             String?
+  abn                     String?
+  email                   String?
+  phone                   String?
+  website                 String?
+  addressLine1            String?
+  addressLine2            String?
+  suburb                  String?
+  state                   String       @default("VIC")
+  postcode                String?
+  logoUrl                 String?
+  bankName                String?
+  bsb                     String?
+  accountNumber           String?
+  accountName             String?
+  gstRegistered           Boolean      @default(true)
+  defaultPaymentTerms     PaymentTerms @default(DAYS_14)
+  defaultPaymentTermsDays Int          @default(14)
+  quoteValidityDays       Int          @default(30)
+  quotePrefix             String       @default("Q")
+  jobPrefix               String       @default("J")
+  invoicePrefix           String       @default("INV")
+  creditNotePrefix        String       @default("CN")
+  invoiceFooter           String?
+  quoteTerms              String?
+  emailTemplates          Json?
+  timezone                String       @default("Australia/Melbourne")
+  createdAt               DateTime     @default(now())
+  updatedAt               DateTime     @updatedAt
+}
+
+model Counter {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

@@ -1,0 +1,6 @@
+# Coolify builds this app with Nixpacks (no Dockerfile needed).
+[phases.setup]
+nixPkgs = ["nodejs_22", "pnpm", "openssl"]
+
+[start]
+cmd = "pnpm prisma migrate deploy && pnpm start"
