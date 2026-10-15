@@ -1,0 +1,895 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CoolOps Guide</title>
+<style>
+:root{
+  --bg:#f7f8fa; --surface:#ffffff; --text:#1c2430; --muted:#5b6675; --border:#dfe3e8;
+  --accent:#0b6bcb; --accent-soft:#e7f1fb; --code-bg:#f0f2f5;
+  --tip-bg:#e9f7ef; --tip-border:#2e9e5b; --warn-bg:#fff6e5; --warn-border:#d98a00;
+  --danger-bg:#fdecec; --danger-border:#d33a3a;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#11151b; --surface:#181e26; --text:#e4e8ee; --muted:#9aa5b4; --border:#2a3340;
+    --accent:#5aa7f0; --accent-soft:#1b2a3b; --code-bg:#222a35;
+    --tip-bg:#13291d; --tip-border:#3fbf76; --warn-bg:#2d2312; --warn-border:#e0a030;
+    --danger-bg:#2e1717; --danger-border:#e06060;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#11151b; --surface:#181e26; --text:#e4e8ee; --muted:#9aa5b4; --border:#2a3340;
+  --accent:#5aa7f0; --accent-soft:#1b2a3b; --code-bg:#222a35;
+  --tip-bg:#13291d; --tip-border:#3fbf76; --warn-bg:#2d2312; --warn-border:#e0a030;
+  --danger-bg:#2e1717; --danger-border:#e06060;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+a{color:var(--accent)}
+.layout{max-width:1200px;margin:0 auto;padding:0 16px;display:grid;grid-template-columns:1fr;gap:32px}
+@media (min-width:1000px){.layout{grid-template-columns:260px 1fr}}
+header.hero{max-width:1200px;margin:0 auto;padding:40px 16px 8px}
+header.hero h1{font-size:2rem;margin:0 0 6px;line-height:1.2}
+header.hero p{color:var(--muted);margin:0;max-width:70ch}
+nav.toc{font-size:.92rem}
+@media (min-width:1000px){nav.toc{position:sticky;top:16px;align-self:start;max-height:calc(100vh - 32px);overflow:auto;padding-bottom:24px}}
+nav.toc h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:24px 0 8px}
+nav.toc ol{margin:0;padding-left:28px}
+nav.toc li{margin:3px 0}
+nav.toc a{text-decoration:none;color:var(--text)}
+nav.toc a:hover{color:var(--accent)}
+main{min-width:0;padding-bottom:80px}
+section{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:8px 20px 20px;margin:24px 0}
+@media (max-width:600px){section{padding:4px 14px 16px}}
+h2{font-size:1.5rem;margin:20px 0 8px;line-height:1.3}
+h3{font-size:1.15rem;margin:26px 0 6px}
+h4{font-size:1rem;margin:18px 0 4px}
+p,li{max-width:75ch}
+ol,ul{padding-left:22px}
+li{margin:4px 0}
+code,kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.9em}
+code{background:var(--code-bg);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+kbd{border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;padding:0 5px;background:var(--surface)}
+pre{background:var(--code-bg);padding:12px 14px;border-radius:8px;overflow-x:auto;font-size:.88rem;line-height:1.5}
+pre code{background:none;padding:0;overflow-wrap:normal}
+.table-wrap{overflow-x:auto;margin:12px 0}
+table{border-collapse:collapse;width:100%;font-size:.93rem}
+th,td{border:1px solid var(--border);padding:7px 10px;text-align:left;vertical-align:top}
+th{background:var(--accent-soft)}
+.callout{border-left:4px solid;border-radius:6px;padding:10px 14px;margin:14px 0}
+.callout p{margin:4px 0}
+.tip{background:var(--tip-bg);border-color:var(--tip-border)}
+.warn{background:var(--warn-bg);border-color:var(--warn-border)}
+.danger{background:var(--danger-bg);border-color:var(--danger-border)}
+.callout strong:first-child{display:block}
+.flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:12px 0}
+.flow span{background:var(--accent-soft);border:1px solid var(--border);border-radius:999px;padding:3px 12px;font-weight:600;font-size:.92rem}
+.flow i{font-style:normal;color:var(--muted)}
+.top{display:block;margin-top:16px;font-size:.85rem}
+.ui{font-weight:600}
+.badge{display:inline-block;font-size:.75rem;font-weight:700;border-radius:4px;padding:0 6px;background:var(--accent-soft);color:var(--accent);vertical-align:middle}
+footer{color:var(--muted);font-size:.85rem;text-align:center;padding:24px 16px}
+</style>
+</head>
+<body>
+<header class="hero" id="top">
+  <h1>CoolOps Guide</h1>
+  <p>Setting up, running and looking after CoolOps, the job management app for Cooling Service Melbourne. Written for people who are not developers. Follow the parts you need; you do not have to read it top to bottom.</p>
+</header>
+
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <h2>Getting started</h2>
+  <ol>
+    <li><a href="#what">What CoolOps does</a></li>
+    <li><a href="#roles">Who can do what</a></li>
+    <li><a href="#need">What you need before you start</a></li>
+    <li><a href="#github">Put the code on GitHub</a></li>
+    <li><a href="#coolify">Put it online with Coolify</a></li>
+    <li><a href="#env">Settings (environment variables)</a></li>
+    <li><a href="#email">Set up email (Resend)</a></li>
+    <li><a href="#data">Demo data or a clean start</a></li>
+    <li><a href="#firstday">First-day checklist</a></li>
+  </ol>
+  <h2>Using the app</h2>
+  <ol start="10">
+    <li><a href="#basics">Finding your way around</a></li>
+    <li><a href="#dashboard">Dashboard</a></li>
+    <li><a href="#leads">Leads</a></li>
+    <li><a href="#clients">Clients, properties and contacts</a></li>
+    <li><a href="#equipment">Equipment</a></li>
+    <li><a href="#pricebook">Price book</a></li>
+    <li><a href="#quotes">Quotes</a></li>
+    <li><a href="#jobs">Jobs</a></li>
+    <li><a href="#schedule">Schedule</a></li>
+    <li><a href="#myjobs">Technicians: My jobs</a></li>
+    <li><a href="#invoices">Invoices</a></li>
+    <li><a href="#payments">Payments</a></li>
+    <li><a href="#maintenance">Maintenance plans</a></li>
+    <li><a href="#reminders">Automatic reminders</a></li>
+    <li><a href="#reports">Reports and exports</a></li>
+    <li><a href="#team">Team</a></li>
+    <li><a href="#settings">Settings</a></li>
+    <li><a href="#audit">Audit log and notifications</a></li>
+    <li><a href="#account">My account</a></li>
+    <li><a href="#website">Website enquiry form</a></li>
+  </ol>
+  <h2>Looking after it</h2>
+  <ol start="30">
+    <li><a href="#local">Try it on your own computer</a></li>
+    <li><a href="#update">Updating the app</a></li>
+    <li><a href="#backup">Backups and restoring</a></li>
+    <li><a href="#trouble">Troubleshooting</a></li>
+    <li><a href="#faq">Questions and answers</a></li>
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#later">Not built yet</a></li>
+    <li><a href="#dev">For developers</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- 1 -->
+<section id="what">
+<h2>1. What CoolOps does</h2>
+<p>CoolOps keeps every part of the business in one place, from the first phone call to the money in the bank, and back again for the next service.</p>
+<div class="flow"><span>Lead</span><i>→</i><span>Quote</span><i>→</i><span>Job</span><i>→</i><span>Invoice</span><i>→</i><span>Payment</span><i>→</i><span>Maintenance reminder</span><i>→</i><span>Next job</span></div>
+<ul>
+  <li><strong>Leads</strong>: new enquiries (phone, website, Google Ads and so on) and where each one came from.</li>
+  <li><strong>Clients</strong>: customers, their properties (addresses) and the air conditioners and heaters at each property.</li>
+  <li><strong>Quotes</strong>: priced quotes with up to five options (for example three sizes of split system). Clients accept online.</li>
+  <li><strong>Jobs and Schedule</strong>: booked work on a calendar, coloured by technician.</li>
+  <li><strong>My jobs</strong>: a phone screen for technicians with big buttons, checklists, photos, parts and customer signature.</li>
+  <li><strong>Invoices and Payments</strong>: proper Australian tax invoices with GST, payments, credit notes, overdue reminders.</li>
+  <li><strong>Maintenance plans</strong>: yearly or regular services, with automatic reminder emails.</li>
+  <li><strong>Reports</strong>: revenue, lead sources, unpaid invoices and more, exportable for your accountant.</li>
+</ul>
+<p>Everything is in Australian dollars, GST is 10%, and all times are Melbourne time, whatever device you use.</p>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 2 -->
+<section id="roles">
+<h2>2. Who can do what</h2>
+<p>Every person gets their own login and one of three roles.</p>
+<div class="table-wrap"><table>
+<tr><th>Role</th><th>Who it is for</th><th>What they can do</th></tr>
+<tr><td><strong>Owner / Admin</strong></td><td>You, the business owner</td><td>Everything, including Settings, Team, the Audit log, cost prices, margins and the Job profitability report.</td></tr>
+<tr><td><strong>Office / Dispatcher</strong></td><td>Office staff</td><td>Leads, clients, equipment, quotes, jobs, schedule, invoices, payments and maintenance plans. Can view reports, the price book and the team. Cannot change Settings or users and cannot see cost prices or margins.</td></tr>
+<tr><td><strong>Technician</strong></td><td>Field staff</td><td>Only <span class="ui">My jobs</span>: the jobs assigned to them. They can update status, tick the checklist, add photos, parts and notes, capture a signature and complete the job. They do not see prices.</td></tr>
+</table></div>
+<p>Technicians are taken straight to <span class="ui">My jobs</span> when they log in. If someone opens a page their role does not allow, they are sent back to their home screen.</p>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 3 -->
+<section id="need">
+<h2>3. What you need before you start</h2>
+<div class="table-wrap"><table>
+<tr><th>Thing</th><th>Why</th><th>Notes</th></tr>
+<tr><td>A server running <strong>Coolify</strong></td><td>Runs the app and its database</td><td>Any VPS with 2 GB RAM or more (for example a Sydney region server). Coolify does the Docker side for you; you never write Docker files.</td></tr>
+<tr><td>A <strong>GitHub</strong> account</td><td>Holds the code; Coolify pulls it from there</td><td>A private repository is fine.</td></tr>
+<tr><td>A <strong>domain</strong></td><td>The web address staff will use</td><td>For example <code>app.coolingservicemelbourne.com.au</code>. You add a DNS "A record" pointing at your server's IP address.</td></tr>
+<tr><td>A <strong>Resend</strong> account</td><td>Sends quote, invoice and reminder emails</td><td>Free tier is enough to start. See <a href="#email">section 7</a>. Without it the app still works but emails are not sent.</td></tr>
+<tr><td>The <strong>code</strong></td><td>The app itself</td><td><code>coolops.zip</code> from the project files.</td></tr>
+</table></div>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 4 -->
+<section id="github">
+<h2>4. Put the code on GitHub</h2>
+<p>Coolify deploys from GitHub, so the code has to live there first. The easiest way without using the command line:</p>
+<ol>
+  <li>Unzip <code>coolops.zip</code> on your computer. You get a folder called <code>coolops</code>.</li>
+  <li>Install <a href="https://desktop.github.com/">GitHub Desktop</a> and sign in.</li>
+  <li>Choose <span class="ui">File → Add local repository</span> and pick the <code>coolops</code> folder. If it says it is not a repository, choose <span class="ui">create a repository</span> there.</li>
+  <li>Click <span class="ui">Publish repository</span>, keep <span class="ui">Keep this code private</span> ticked, and publish.</li>
+</ol>
+<p>If you prefer the command line:</p>
+<pre><code>cd coolops
+git init
+git add .
+git commit -m "CoolOps"
+git branch -M main
+git remote add origin https://github.com/YOUR-NAME/coolops.git
+git push -u origin main</code></pre>
+<div class="callout warn"><strong>Never upload your .env file</strong><p>The <code>.env</code> file holds passwords and secret keys. It is already listed in <code>.gitignore</code> so Git skips it. Do not remove that line.</p></div>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 5 -->
+<section id="coolify">
+<h2>5. Put it online with Coolify</h2>
+<p>Coolify builds the app with <strong>Nixpacks</strong>, which turns the code into a running container automatically. The file <code>nixpacks.toml</code> in the code already tells it to use Node 22 and to update the database structure every time the app starts. You only click through the steps below.</p>
+
+<h3>Step 1: Create the database</h3>
+<ol>
+  <li>In Coolify, open your project and click <span class="ui">+ New</span> → <span class="ui">Database</span> → <span class="ui">PostgreSQL</span> (version 16).</li>
+  <li>Click <span class="ui">Start</span> and wait until it shows as running.</li>
+  <li>Copy the <strong>internal connection URL</strong> (it looks like <code>postgres://postgres:LONGPASSWORD@abc123:5432/postgres</code>). You will paste it into the app in step 3.</li>
+</ol>
+<div class="callout tip"><strong>Tip</strong><p>Use the <em>internal</em> URL, not the public one. The app and database talk to each other inside the server, which is faster and safer. You do not need to make the database public.</p></div>
+
+<h3>Step 2: Create the app</h3>
+<ol>
+  <li>In the same project click <span class="ui">+ New</span> → <span class="ui">Application</span> and choose your GitHub repository (connect your GitHub account or the Coolify GitHub App if asked).</li>
+  <li>Branch: <code>main</code>. Build pack: <strong>Nixpacks</strong>.</li>
+  <li>Ports exposed: <code>3000</code>.</li>
+  <li>Leave the install, build and start commands empty. They come from the code.</li>
+</ol>
+
+<h3>Step 3: Add the settings</h3>
+<p>Open the app's <span class="ui">Environment Variables</span> tab and add each one from the table in <a href="#env">section 6</a>. At minimum: <code>DATABASE_URL</code>, <code>AUTH_SECRET</code>, <code>AUTH_URL</code>, <code>APP_URL</code>, <code>CRON_SECRET</code>, <code>LEAD_WEBHOOK_SECRET</code>.</p>
+
+<h3>Step 4: Keep uploaded files safe</h3>
+<p>Job photos, signatures and your logo are saved as files. Without this step they disappear every time you redeploy.</p>
+<ol>
+  <li>Add the variables <code>STORAGE_DRIVER=local</code> and <code>STORAGE_LOCAL_DIR=/app/uploads</code>.</li>
+  <li>Open the app's <span class="ui">Persistent Storage</span> (Storages) tab and add a <strong>volume</strong> with destination path <code>/app/uploads</code>.</li>
+</ol>
+
+<h3>Step 5: Your web address</h3>
+<ol>
+  <li>At your domain registrar, add an <strong>A record</strong> for <code>app</code> (or whatever name you like) pointing to your server's IP address.</li>
+  <li>In the app's <span class="ui">General</span> tab, set <span class="ui">Domains</span> to <code>https://app.coolingservicemelbourne.com.au</code>. Coolify gets the HTTPS certificate for you.</li>
+  <li>Make sure <code>AUTH_URL</code> and <code>APP_URL</code> use exactly this address.</li>
+</ol>
+
+<h3>Step 6: Deploy</h3>
+<ol>
+  <li>Click <span class="ui">Deploy</span>. The first build takes a few minutes. Watch the logs; it is finished when you see the app listening on port 3000.</li>
+  <li>The first start creates all the database tables automatically.</li>
+  <li>Now load data: see <a href="#data">section 8</a>. You cannot log in until you do, because there are no users yet.</li>
+</ol>
+
+<h3>Step 7: Daily reminders</h3>
+<p>Overdue invoice emails, service-due reminders and licence alerts run once a day.</p>
+<ol>
+  <li>Open the app's <span class="ui">Scheduled Tasks</span> tab and add a task.</li>
+  <li>Name: <code>Daily reminders</code>. Command: <code>pnpm cron:reminders</code>. Frequency: <code>0 8 * * *</code> (8:00 every day).</li>
+  <li>Coolify runs schedules in the server's time zone. Set the server's timezone to <code>Australia/Melbourne</code> in Coolify's server settings, or use <code>0 21 * * *</code> if the server stays on UTC (8 am in summer, 7 am in winter).</li>
+</ol>
+<p>To test it, click <span class="ui">Run now</span> (or run <code>pnpm cron:reminders</code> in the app's Terminal). It prints a summary such as <code>200 {"ok":true,"overdueEmails":0,...}</code>. Running it twice is safe: nothing is sent twice.</p>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 6 -->
+<section id="env">
+<h2>6. Settings (environment variables)</h2>
+<p>Environment variables are the app's private settings. You type them into Coolify once. To make a random secret, run <code>openssl rand -base64 32</code> in a terminal, or use any password generator set to 40+ characters.</p>
+<div class="table-wrap"><table>
+<tr><th>Name</th><th>Needed?</th><th>What it is</th><th>Example</th></tr>
+<tr><td><code>DATABASE_URL</code></td><td>Yes</td><td>Where the database is. The internal URL from Coolify.</td><td><code>postgres://postgres:…@abc123:5432/postgres</code></td></tr>
+<tr><td><code>AUTH_SECRET</code></td><td>Yes</td><td>Secret used to protect logins. Random, keep it private, never change it once live (everyone gets logged out if you do).</td><td>40 random characters</td></tr>
+<tr><td><code>AUTH_URL</code></td><td>Yes</td><td>Your web address.</td><td><code>https://app.coolingservicemelbourne.com.au</code></td></tr>
+<tr><td><code>APP_URL</code></td><td>Yes</td><td>Same address. Used for links in emails (quote and invoice links).</td><td>same as above</td></tr>
+<tr><td><code>RESEND_API_KEY</code></td><td>For email</td><td>Key from Resend. Leave empty and emails are only written to the logs, not sent.</td><td><code>re_…</code></td></tr>
+<tr><td><code>EMAIL_FROM</code></td><td>For email</td><td>Who emails come from. Must use a domain verified in Resend.</td><td><code>Cooling Service Melbourne &lt;office@coolingservicemelbourne.com.au&gt;</code></td></tr>
+<tr><td><code>LEAD_WEBHOOK_SECRET</code></td><td>Yes</td><td>Password your website uses to send enquiries in. Random.</td><td>40 random characters</td></tr>
+<tr><td><code>LEAD_WEBHOOK_ALLOWED_ORIGINS</code></td><td>Optional</td><td>Only if your website sends enquiries straight from the visitor's browser. Comma-separated site addresses.</td><td><code>https://coolingservicemelbourne.com.au</code></td></tr>
+<tr><td><code>CRON_SECRET</code></td><td>Yes</td><td>Password for the daily reminders task. Random.</td><td>40 random characters</td></tr>
+<tr><td><code>STORAGE_DRIVER</code></td><td>Yes</td><td><code>local</code> (files on the server volume) or <code>s3</code> (Cloudflare R2, AWS S3, Supabase).</td><td><code>local</code></td></tr>
+<tr><td><code>STORAGE_LOCAL_DIR</code></td><td>With local</td><td>Folder for uploads. Must match the volume path.</td><td><code>/app/uploads</code></td></tr>
+<tr><td><code>STORAGE_S3_ENDPOINT</code>, <code>STORAGE_S3_REGION</code>, <code>STORAGE_S3_BUCKET</code>, <code>STORAGE_S3_ACCESS_KEY_ID</code>, <code>STORAGE_S3_SECRET_ACCESS_KEY</code>, <code>STORAGE_S3_PUBLIC_URL</code></td><td>With s3 only</td><td>Details from your storage provider.</td><td>—</td></tr>
+</table></div>
+<p>After changing any variable, click <span class="ui">Redeploy</span> (or <span class="ui">Restart</span>) so the app picks it up.</p>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 7 -->
+<section id="email">
+<h2>7. Set up email (Resend)</h2>
+<ol>
+  <li>Sign up at <a href="https://resend.com">resend.com</a>.</li>
+  <li>Go to <span class="ui">Domains</span> → <span class="ui">Add domain</span> and enter <code>coolingservicemelbourne.com.au</code>.</li>
+  <li>Resend shows a few DNS records (TXT and MX). Add them at your domain registrar exactly as shown, then click <span class="ui">Verify</span>. It can take from minutes to a few hours.</li>
+  <li>Go to <span class="ui">API Keys</span> → <span class="ui">Create API key</span> (sending access). Copy it into <code>RESEND_API_KEY</code> in Coolify.</li>
+  <li>Set <code>EMAIL_FROM</code> to an address on that domain, then redeploy.</li>
+  <li>Test: open a quote or invoice for a client whose email is <em>yours</em> and click <span class="ui">Send</span>.</li>
+</ol>
+<div class="callout tip"><strong>Which emails the app sends</strong><p>Quote sent, invoice sent, overdue invoice reminders (1, 7 and 14 days overdue), service-due reminders to clients, and alerts to the office (new website lead, licence or warranty expiring, service due). You can change the wording of the client emails in <span class="ui">Settings → Email templates</span>.</p></div>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 8 -->
+<section id="data">
+<h2>8. Demo data or a clean start</h2>
+<p>A new database has no users, so you load the starter data once. This creates 4 logins, business settings, checklist templates and a realistic set of example clients, quotes, jobs and invoices you can practise on.</p>
+<ol>
+  <li>In Coolify open the <strong>app</strong> and go to <span class="ui">Terminal</span>.</li>
+  <li>Type <code>pnpm db:seed</code> and press <kbd>Enter</kbd>. Wait until it finishes.</li>
+  <li>Open your web address and log in.</li>
+</ol>
+<div class="table-wrap"><table>
+<tr><th>Email</th><th>Role</th><th>Password</th></tr>
+<tr><td><code>admin@coolops.local</code></td><td>Owner / Admin</td><td rowspan="4"><code>ChangeMe123!</code></td></tr>
+<tr><td><code>office@coolops.local</code></td><td>Office / Dispatcher</td></tr>
+<tr><td><code>tech1@coolops.local</code></td><td>Technician</td></tr>
+<tr><td><code>tech2@coolops.local</code></td><td>Technician (gas fitter)</td></tr>
+</table></div>
+<div class="callout danger"><strong>Run the seed only once</strong><p><code>pnpm db:seed</code> <strong>deletes everything</strong> in the database and starts again with demo data. Never run it after you have entered real clients, jobs or invoices.</p></div>
+
+<h3>Going live: clear the demo data</h3>
+<p>When you have finished practising, remove the example records but keep your admin login, settings and checklist templates:</p>
+<ol>
+  <li>First take a backup (<a href="#backup">section 32</a>).</li>
+  <li>In Coolify open the <strong>database</strong> (not the app), go to <span class="ui">Terminal</span>, type <code>psql -U postgres -d postgres</code> and press <kbd>Enter</kbd>. (If you named the database differently, use that name after <code>-d</code>.)</li>
+  <li>Paste the block below and press <kbd>Enter</kbd>. Then type <code>\q</code> to leave.</li>
+</ol>
+<pre><code>BEGIN;
+TRUNCATE "Activity", "Attachment", "AuditLog", "Client", "Contact", "CreditNote", "Equipment",
+  "InventoryItem", "Invoice", "InvoiceLineItem", "Job", "JobAssignment", "JobChecklistItem",
+  "JobEquipment", "JobLineItem", "Lead", "MaintenancePlan", "MaintenancePlanEquipment",
+  "Notification", "Payment", "PriceBookItem", "Property", "Quote", "QuoteLineItem", "QuoteOption",
+  "Reminder", "Supplier", "TechnicianLicence", "TimeEntry", "Session" CASCADE;
+DELETE FROM "User" WHERE email &lt;&gt; 'admin@coolops.local';
+UPDATE "Counter" SET value = 0;
+COMMIT;</code></pre>
+<p>This removes all leads, clients, quotes, jobs, invoices, payments, the demo price book and the three demo staff logins, and restarts numbering at 0001. Then follow the <a href="#firstday">first-day checklist</a>, including changing the admin email and password.</p>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 9 -->
+<section id="firstday">
+<h2>9. First-day checklist</h2>
+<p>Log in as <code>admin@coolops.local</code> and work down this list.</p>
+<ol>
+  <li><strong>Secure the admin login.</strong> Go to <span class="ui">Team</span>, open Alex Morgan (the admin), change the name and email to your own and save. Then go to <span class="ui">My account</span> (round account button, top right) and change the password.</li>
+  <li><strong>Business details.</strong> <span class="ui">Settings → Business</span>: legal business name, ABN, address, phone, email, and upload your logo (PNG or JPG, under 2 MB).</li>
+  <li><strong>GST, terms and bank details.</strong> <span class="ui">Settings → Invoicing</span>: tick <span class="ui">Registered for GST</span> if you are, choose default payment terms, enter BSB and account details (they print on every invoice), quote validity days, invoice footer and quote terms and conditions.</li>
+  <li><strong>Numbering.</strong> <span class="ui">Settings → Numbering</span>: set prefixes (for example <code>INV-</code>) and, if you are moving from another system, set the next invoice, quote and job number so you carry on from where you were.</li>
+  <li><strong>Email wording.</strong> <span class="ui">Settings → Email templates</span>: adjust the subject and message for quotes, invoices, overdue reminders and service reminders.</li>
+  <li><strong>Job checklists.</strong> <span class="ui">Settings → Checklists</span>: edit the steps technicians tick off for each job type, one item per line.</li>
+  <li><strong>Add your staff.</strong> <span class="ui">Team → Add user</span> for each person: name, login email, mobile, role, calendar colour, hourly cost (for profit reports) and a starting password. Add each technician's licences (ARC, gas, electrical…) with expiry dates.</li>
+  <li><strong>Price book.</strong> <span class="ui">Price book → New item</span> for your common services, parts and units, with cost and sell prices (ex GST).</li>
+  <li><strong>Website form.</strong> Connect your website's enquiry form (<a href="#website">section 29</a>).</li>
+  <li><strong>Test the whole flow once</strong> with yourself as the client: lead → quote → accept → job → complete → invoice → payment.</li>
+</ol>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 10 -->
+<section id="basics">
+<h2>10. Finding your way around</h2>
+<ul>
+  <li><strong>Menu</strong>: on the left on a computer, behind the ☰ button on a phone. It only shows what your role can use, grouped into <em>Work</em>, <em>Money</em> and <em>Admin</em>.</li>
+  <li><strong>Search everything</strong>: press <kbd>Ctrl</kbd>+<kbd>K</kbd> (<kbd>⌘</kbd>+<kbd>K</kbd> on a Mac) to jump to a client, job, quote or invoice by name or number.</li>
+  <li><strong>Notifications</strong>: the bell at the top shows new website leads, accepted quotes, paid invoices and expiring licences.</li>
+  <li><strong>Light or dark</strong>: the theme button at the top switches the look.</li>
+  <li><strong>Lists</strong>: every list has search, filters and sortable columns. Click a row to open it.</li>
+  <li><strong>The ⋯ button</strong> (<span class="ui">More actions</span>) on a record holds less common actions such as delete, duplicate or void.</li>
+  <li><strong>Prices</strong> you type are ex GST unless the field says "inc GST". GST is added automatically.</li>
+</ul>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 11 -->
+<section id="dashboard">
+<h2>11. Dashboard</h2>
+<p>The first screen for admin and office. It shows:</p>
+<ul>
+  <li><strong>Jobs today</strong> with times and technicians.</li>
+  <li><strong>New leads this week</strong> and leads waiting for contact.</li>
+  <li><strong>Quotes awaiting reply</strong>.</li>
+  <li><strong>Outstanding</strong> money and <strong>Overdue invoices</strong>.</li>
+  <li><strong>Revenue this month</strong> compared with last month, and a revenue chart.</li>
+  <li>Quick buttons: <span class="ui">New lead</span>, <span class="ui">New quote</span>, <span class="ui">New job</span>, <span class="ui">New invoice</span>, <span class="ui">Record payment</span>.</li>
+</ul>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 12 -->
+<section id="leads">
+<h2>12. Leads</h2>
+<p>A lead is an enquiry that is not yet a customer job. Website enquiries arrive here automatically; you add phone calls yourself.</p>
+<p>Leads move through: <strong>New → Contacted → Site visit booked → Quoted → Won</strong>, or <strong>Lost</strong>.</p>
+<h3>How do I add a lead from a phone call?</h3>
+<ol>
+  <li>Go to <span class="ui">Leads</span> and click <span class="ui">New lead</span>.</li>
+  <li>Fill in name, phone and/or email, suburb and postcode, <span class="ui">Service</span>, <span class="ui">Source</span> (Phone call, Google Ads, Referral…), urgency, estimated value and what they need.</li>
+  <li>Optionally assign it to someone and set a <span class="ui">Follow up on</span> date. Save.</li>
+</ol>
+<h3>How do I move a lead along?</h3>
+<p>Use the <span class="ui">Pipeline</span> view and drag the card to the next column, or open the lead and change <span class="ui">Lead status</span>. Switch to <span class="ui">Table</span> view for a sortable list.</p>
+<h3>How do I turn a lead into a customer?</h3>
+<ol>
+  <li>Open the lead and click <span class="ui">Convert</span>.</li>
+  <li>Pick an existing client or create a new one (choose client type and service address).</li>
+  <li>Under <span class="ui">Then</span> choose <span class="ui">Create a quote</span>, <span class="ui">Create a job (marks lead won)</span>, or <span class="ui">Just create the client</span>.</li>
+  <li>CoolOps creates the client and property and takes you to the new quote or job. The lead is linked so reports can show which source won the work.</li>
+</ol>
+<h3>How do I mark a lead as lost?</h3>
+<p>Open it, click <span class="ui">Mark lost</span> and choose the reason (Too expensive, Went with another company, No reply, Not ready / timing, Outside service area, Did it themselves, Other). The reasons appear in reports so you can learn from them.</p>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 13 -->
+<section id="clients">
+<h2>13. Clients, properties and contacts</h2>
+<ul>
+  <li><strong>Client</strong>: who pays. Types: Residential, Commercial, Real estate / Property manager, Builder.</li>
+  <li><strong>Property</strong>: where the work is done. One client can have many (useful for agents and landlords). Each property has access notes, parking, pets and keys/lockbox details for technicians.</li>
+  <li><strong>Contacts</strong>: other people at a client, such as a tenant or site manager.</li>
+</ul>
+<h3>How do I add a client?</h3>
+<ol>
+  <li><span class="ui">Clients → New client</span>.</li>
+  <li>Enter name, type, company (if any), email, phone, ABN for businesses, how they found you and the address. The address becomes their first property.</li>
+  <li>Use <span class="ui">Do not service</span> to warn the office when booking work for difficult clients.</li>
+</ol>
+<h3>What is on a client page?</h3>
+<p>Tabs with everything about them: overview (properties, contacts, totals such as lifetime value and outstanding balance), their leads, quotes, jobs, invoices, payments, maintenance plans and an activity timeline. Add call notes with <span class="ui">Add note</span>.</p>
+<h3>How do I add another property?</h3>
+<p>On the client page click <span class="ui">Add property</span>. Open a property to see its equipment and job history.</p>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 14 -->
+<section id="equipment">
+<h2>14. Equipment</h2>
+<p>A register of every unit you install or service: type, brand, indoor and outdoor model, serial number, capacity (kW), refrigerant, install date, warranty expiry and location in the house.</p>
+<ol>
+  <li>Open the property (from the client page) and add the unit there.</li>
+  <li>The <span class="ui">Equipment</span> menu lists every unit across all clients. Open one to see its <span class="ui">Service history</span>: every job that listed it.</li>
+  <li>Link units to a job on the job page so the history builds up automatically.</li>
+</ol>
+<p>The office is alerted 30 days before a warranty expires.</p>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 15 -->
+<section id="pricebook">
+<h2>15. Price book</h2>
+<p>Your list of services, parts and equipment with sell price (ex GST), cost price, unit, GST yes/no and category. Office can view it; only admin sees costs and margins and can edit.</p>
+<ul>
+  <li><span class="ui">Price book → New item</span> to add. Untick <span class="ui">Active</span> to hide an item from pickers without deleting it.</li>
+  <li>When building a quote, job or invoice, use <span class="ui">Add from price book</span> to drop an item in with its price. You can still change the price on that line.</li>
+</ul>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 16 -->
+<section id="quotes">
+<h2>16. Quotes</h2>
+<p>Statuses: <strong>Draft → Sent → Viewed → Accepted</strong>, or <strong>Declined</strong> / <strong>Expired</strong> (after the valid-until date).</p>
+<h3>How do I write a quote?</h3>
+<ol>
+  <li><span class="ui">Quotes → New quote</span> (or convert a lead).</li>
+  <li>Pick the client and site, give it a title and check the <span class="ui">Valid until</span> date.</li>
+  <li>Add lines: from the price book or as custom lines. Each line has quantity, price and GST on/off. Totals and GST are calculated for you.</li>
+  <li>Need choices? Add up to five <strong>options</strong> (for example Good / Better / Best, or 2.5 kW / 3.5 kW / 5 kW). The client picks one.</li>
+  <li>Add an introduction and check the terms, then <span class="ui">Save quote</span> (or <span class="ui">Save draft</span>).</li>
+</ol>
+<h3>How do I send it?</h3>
+<p>On the quote page click <span class="ui">Send</span>. The client gets an email with a private link where they can see the options, download the PDF, and <strong>accept or decline online</strong> (to accept, they choose an option and type their name). When they open it the status becomes Viewed; when they accept, you get a notification.</p>
+<p>Other buttons: <span class="ui">PDF</span> (download), <span class="ui">Edit</span>, and under ⋯: <span class="ui">Copy client link</span> (to paste into a text message), <span class="ui">Open client view</span>, <span class="ui">Record acceptance</span> or <span class="ui">Record decline</span> (when they tell you by phone), <span class="ui">Duplicate</span>, <span class="ui">Delete</span>.</p>
+<h3>Accepted. Now what?</h3>
+<p>Click <span class="ui">Create job</span>. The chosen option's lines are copied into a new job ready to schedule.</p>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 17 -->
+<section id="jobs">
+<h2>17. Jobs</h2>
+<p>Job types: Installation, Service / Maintenance, Repair, Emergency, Inspection, Warranty, Quote visit. Priority: Low, Normal, High, Emergency.</p>
+<p>Statuses: <strong>Unscheduled → Scheduled → En route → In progress → Completed → Invoiced</strong>, plus <strong>On hold</strong> (for example waiting for parts) and <strong>Cancelled</strong>.</p>
+<h3>How do I create a job?</h3>
+<ol>
+  <li><span class="ui">Jobs → New job</span>, or click an empty time on the <a href="#schedule">Schedule</a>, or <span class="ui">Create job</span> on an accepted quote.</li>
+  <li>Choose client and site, job type, priority, title and description.</li>
+  <li>Set start and end time (or leave unscheduled to book later) and estimated minutes.</li>
+  <li>Choose the technician(s). Save.</li>
+</ol>
+<h3>What is on a job page?</h3>
+<ul>
+  <li><strong>Details</strong> and status buttons: <span class="ui">On my way</span>, <span class="ui">Start job</span>, <span class="ui">Put on hold</span> / <span class="ui">Resume</span>, <span class="ui">Complete</span>, <span class="ui">Cancel</span>.</li>
+  <li><strong>Technicians</strong> assigned.</li>
+  <li><strong>Checklist</strong>: added from the template for the job type (<span class="ui">Add checklist</span>), plus your own items.</li>
+  <li><strong>Equipment</strong> at the site worked on in this job.</li>
+  <li><strong>Parts and labour</strong>: lines that go on the invoice (<span class="ui">Add part / labour</span> or from the price book).</li>
+  <li><strong>Time on site</strong>: starting the job starts a timer automatically; completing stops it.</li>
+  <li><strong>Photos and files</strong> (before / after), <strong>notes</strong>, <strong>customer signature</strong>.</li>
+  <li><strong>Completion details</strong>: work performed, refrigerant recovered and added (kg) and gas compliance certificate number.</li>
+  <li><strong>Invoices</strong> raised from this job.</li>
+</ul>
+<p>Under ⋯: <span class="ui">Edit</span>, <span class="ui">Unschedule</span> (moves it back to the unscheduled list) and <span class="ui">Delete job</span> (not possible once it has an invoice).</p>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 18 -->
+<section id="schedule">
+<h2>18. Schedule</h2>
+<p>A calendar of all jobs, coloured by technician. Times are always Melbourne time.</p>
+<ul>
+  <li>Switch between <span class="ui">Week</span>, <span class="ui">Day</span> and <span class="ui">Month</span>; use the arrows and <span class="ui">Today</span> to move around.</li>
+  <li><strong>Book a job</strong>: drag across an empty time slot. A new job form opens with that time filled in.</li>
+  <li><strong>Reschedule</strong>: drag a job to another time or day. Drag its bottom edge to make it longer or shorter.</li>
+  <li><strong>Unscheduled jobs</strong> are listed on the right. Drag one onto the calendar to book it.</li>
+  <li><strong>Show / hide technicians</strong> with the coloured buttons above the calendar.</li>
+  <li>Click a job to open it. Completed jobs look paler.</li>
+</ul>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 19 -->
+<section id="myjobs">
+<h2>19. Technicians: My jobs</h2>
+<p>Built for a phone. Technicians log in at your web address and land here. Tip: on the phone, use the browser's <span class="ui">Add to Home Screen</span> so it opens like an app.</p>
+<h3>A typical job, step by step</h3>
+<ol>
+  <li>Open today's job from the list (<span class="ui">In progress</span> and <span class="ui">Upcoming</span>).</li>
+  <li>Tap <span class="ui">Directions</span> to open the address in Maps. Check access, parking, pets and key notes.</li>
+  <li>Tap <span class="ui">On my way</span> when leaving.</li>
+  <li>Tap <span class="ui">Start job</span> on arrival. The time-on-site timer starts.</li>
+  <li>Tick the <strong>Checklist</strong> as you go.</li>
+  <li>Add <strong>Photos</strong> (choose before / after) straight from the camera.</li>
+  <li>Add <strong>Parts &amp; labour used</strong> and any notes.</li>
+  <li>Fill in <strong>Completion details</strong>: work performed, refrigerant recovered/added, gas certificate number if gas work.</li>
+  <li>Hand the phone to the customer for the <strong>Customer signature</strong>.</li>
+  <li>Tap <span class="ui">Complete</span>. The office sees it straight away and can invoice it.</li>
+</ol>
+<p>Waiting for parts? Tap <span class="ui">Put on hold</span>, then <span class="ui">Resume</span> later.</p>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 20 -->
+<section id="invoices">
+<h2>20. Invoices</h2>
+<p>Statuses are worked out automatically from the money and dates: <strong>Draft → Sent → Partially paid / Overdue → Paid</strong>, or <strong>Void</strong>.</p>
+<p>Every invoice is a valid Australian <strong>Tax Invoice</strong>: your business name and ABN, the words "Tax Invoice", invoice number and date, the client (and their ABN), each line, GST and total, and your bank details.</p>
+<h3>How do I invoice a finished job?</h3>
+<ol>
+  <li>Open the job and click <span class="ui">Create invoice</span>.</li>
+  <li>Choose <span class="ui">Invoice the job in full</span>. The job's parts and labour lines are copied in. Any deposit or progress invoices already raised are deducted automatically.</li>
+  <li>Check it, then click <span class="ui">Send</span>.</li>
+</ol>
+<h3>Deposits and progress claims (big installs)</h3>
+<p>On the job, <span class="ui">Create invoice</span> → <span class="ui">Deposit invoice…</span> or <span class="ui">Progress claim…</span> and enter a percentage of the job value (30% is suggested for deposits). The final full invoice subtracts them.</p>
+<h3>An invoice without a job</h3>
+<p><span class="ui">Invoices → New invoice</span>, pick the client, add lines, set issue date, due date and payment terms.</p>
+<h3>Buttons on an invoice</h3>
+<ul>
+  <li><span class="ui">Send</span> / <span class="ui">Resend</span>: emails the client a link to view and download the PDF.</li>
+  <li><span class="ui">PDF</span>: download it yourself (to print or attach elsewhere).</li>
+  <li><span class="ui">Record payment</span>: see <a href="#payments">Payments</a>.</li>
+  <li><span class="ui">Edit</span>: change lines or dates.</li>
+  <li>Under ⋯: <span class="ui">Copy client link</span>, <span class="ui">Open client view</span>, <span class="ui">Mark as sent</span> (if you gave it to them another way), <span class="ui">Issue credit note</span>, <span class="ui">Void invoice</span>, <span class="ui">Delete draft</span>.</li>
+</ul>
+<h3>Credit note or void?</h3>
+<ul>
+  <li><strong>Credit note</strong>: you need to reduce what the client owes (a discount after the fact, a returned part). Enter the amount inc GST and a reason. It gets its own number (CN-0001) and lowers the balance.</li>
+  <li><strong>Void</strong>: the invoice should never have existed (wrong client, duplicate). It stays on record, marked Void, and is not counted.</li>
+</ul>
+<div class="callout tip"><strong>Numbers never repeat</strong><p>Invoice, quote, job and credit note numbers are given out one at a time and are never reused, as the ATO expects.</p></div>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 21 -->
+<section id="payments">
+<h2>21. Payments</h2>
+<h3>How do I record a payment?</h3>
+<ol>
+  <li>Open the invoice and click <span class="ui">Record payment</span> (or use the button on the Dashboard or Payments page).</li>
+  <li>Enter the amount (inc GST), date received, method (Card (EFTPOS), Bank transfer, Cash, Cheque, Other) and a reference such as the bank transaction ID.</li>
+  <li>Save. The balance and status update immediately: part payments show <em>Partially paid</em>, full payment shows <em>Paid</em>.</li>
+</ol>
+<ul>
+  <li><strong>Refund</strong>: record a payment and tick <span class="ui">This is a refund to the client</span>.</li>
+  <li><strong>Mistake</strong>: remove the payment from the invoice's payments list. The balance is recalculated.</li>
+  <li>The <span class="ui">Payments</span> page lists all money received with totals, filters and the most used method.</li>
+</ul>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 22 -->
+<section id="maintenance">
+<h2>22. Maintenance plans</h2>
+<p>For clients on a regular service (for example an annual split system service). This is your repeat revenue.</p>
+<ol>
+  <li><span class="ui">Maintenance → New plan</span>.</li>
+  <li>Choose client and site, give the plan a name, tick the equipment it covers, choose frequency (Monthly, Quarterly, Six-monthly, Yearly), price per visit (ex GST) and start date.</li>
+  <li><span class="ui">Create plan</span>. The <span class="ui">Next service due</span> date is worked out for you.</li>
+</ol>
+<ul>
+  <li>14 days before a service is due, the client gets a reminder email and the office gets a notification.</li>
+  <li>Click <span class="ui">Create job</span> on a plan to make the service job. When that job is completed, the next due date moves forward by one period.</li>
+  <li>Untick <span class="ui">Active</span> to pause a plan; inactive plans do not send reminders.</li>
+</ul>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 23 -->
+<section id="reminders">
+<h2>23. Automatic reminders</h2>
+<p>Once a day (the scheduled task from <a href="#coolify">section 5, step 7</a>) CoolOps:</p>
+<ol>
+  <li>marks unpaid invoices past their due date as <strong>Overdue</strong> and emails the client at 1, 7 and 14 days overdue (each only once);</li>
+  <li>emails clients whose maintenance service is due within 14 days, and tells the office;</li>
+  <li>warns about technician licences and equipment warranties expiring within 30 days;</li>
+  <li>marks quotes past their valid-until date as <strong>Expired</strong>.</li>
+</ol>
+<p>Nothing is ever sent twice, even if the task runs more than once in a day.</p>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 24 -->
+<section id="reports">
+<h2>24. Reports and exports</h2>
+<p><span class="ui">Reports</span>: pick a report, pick a date range (This month, Last month, This financial year, Last financial year, Last 12 months, Last 30 days, or your own dates), then <span class="ui">Export CSV</span> to open it in Excel or send to your accountant.</p>
+<div class="table-wrap"><table>
+<tr><th>Report</th><th>Answers</th></tr>
+<tr><td>Revenue by month</td><td>How much did we invoice and collect each month?</td></tr>
+<tr><td>Revenue by service category</td><td>Split, ducted, gas heating… which earns most?</td></tr>
+<tr><td>Revenue by technician</td><td>Who brings in what?</td></tr>
+<tr><td>Lead sources &amp; win rate</td><td>Which marketing actually pays (leads, wins, revenue per source)?</td></tr>
+<tr><td>Quote conversion</td><td>What share of quotes are accepted?</td></tr>
+<tr><td>Aged receivables</td><td>Who owes money: current, 30, 60, 90+ days.</td></tr>
+<tr><td>Job profitability <span class="badge">Admin</span></td><td>Revenue minus parts cost minus labour cost per job.</td></tr>
+<tr><td>Top clients</td><td>Who spends most?</td></tr>
+<tr><td>Clients due for service</td><td>Who should we call for their next service?</td></tr>
+</table></div>
+<h3>Xero</h3>
+<p><span class="ui">Integrations</span> has a <strong>Xero export</strong> → <span class="ui">Download all invoices</span>: a CSV of sent invoices in Xero's sales-invoice import format (account code 200). In Xero use <span class="ui">Business → Invoices → Import</span>. Automatic two-way Xero sync is not built yet.</p>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 25 -->
+<section id="team">
+<h2>25. Team</h2>
+<ul>
+  <li><span class="ui">Team → Add user</span>: name, login email, mobile, role, calendar colour, hourly cost (wage plus on-costs, used for job profitability) and a password (at least 10 characters with a letter and a number).</li>
+  <li><strong>Someone leaves</strong>: open them and untick <span class="ui">Active</span>. They can no longer log in and disappear from the schedule, but their history stays.</li>
+  <li><strong>Forgotten password</strong>: an admin opens the person and sets a new password for them. (There is no "forgot password" email link.)</li>
+  <li><strong>Licences</strong>: on a person's page, <span class="ui">Add licence</span> with type (ARC refrigerant, gas fitting, electrical, driver's, working with children…), number, issue and expiry dates. You are warned 30 days before expiry.</li>
+</ul>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 26 -->
+<section id="settings">
+<h2>26. Settings <span class="badge">Admin</span></h2>
+<div class="table-wrap"><table>
+<tr><th>Tab</th><th>What is there</th></tr>
+<tr><td>Business</td><td>Legal name, ABN, address, phone, email, logo.</td></tr>
+<tr><td>Invoicing</td><td>Registered for GST, default payment terms, bank name, BSB, account number, quote validity, invoice footer, quote terms and conditions.</td></tr>
+<tr><td>Numbering</td><td>Prefixes for quotes, jobs, invoices and credit notes, and the next number for each.</td></tr>
+<tr><td>Email templates</td><td>Subject and message for quote sent, invoice sent, invoice overdue and service due. Use placeholders like <code>{{clientName}}</code>, <code>{{number}}</code>, <code>{{total}}</code>, <code>{{dueDate}}</code>, <code>{{balance}}</code>, <code>{{businessName}}</code>; each template lists the ones it accepts.</td></tr>
+<tr><td>Checklists</td><td>Checklist steps for each job type and service category. Changes apply to new checklists; existing jobs keep theirs.</td></tr>
+<tr><td>Users</td><td>A shortcut to add users (same as Team).</td></tr>
+</table></div>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 27 -->
+<section id="audit">
+<h2>27. Audit log and notifications</h2>
+<p><span class="ui">Audit log</span> (admin only) records who created, changed or deleted what and when, with filters. Useful when something looks wrong ("who voided this invoice?").</p>
+<p>The <strong>bell</strong> shows in-app notifications: new website lead, quote accepted or declined, invoice paid, service due, licence or warranty expiring.</p>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 28 -->
+<section id="account">
+<h2>28. My account</h2>
+<p>Everyone can open <span class="ui">My account</span> from the round account button at the top right to change their own password (current password, then the new one twice) and sign out.</p>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 29 -->
+<section id="website">
+<h2>29. Website enquiry form</h2>
+<p>Your website's contact form can send enquiries straight into <span class="ui">Leads</span>. The office gets a notification and an email. If the same person enquires again within 24 hours (same email or phone), it is added to the existing lead instead of making a duplicate.</p>
+<p>The form must send a <code>POST</code> request to <code>https://YOUR-APP-ADDRESS/api/leads/webhook</code> with the header <code>x-api-key</code> set to your <code>LEAD_WEBHOOK_SECRET</code> and a JSON body like this:</p>
+<pre><code>{
+  "name": "Jane Citizen",
+  "email": "jane@example.com",
+  "phone": "0412 345 678",
+  "suburb": "Brunswick",
+  "postcode": "3056",
+  "service": "Split system service",
+  "brand": "Daikin",
+  "message": "Two units, one is making a rattling noise.",
+  "utm_source": "google",
+  "utm_medium": "cpc",
+  "utm_campaign": "aircon-service",
+  "gclid": "abc123",
+  "site": "coolingservicemelbourne.com.au"
+}</code></pre>
+<ul>
+  <li><code>name</code> plus <code>email</code> or <code>phone</code> are required; everything else is optional.</li>
+  <li><code>utm_*</code> and <code>gclid</code> come from your ad links. A <code>gclid</code> marks the lead as Google Ads so the Lead sources report shows your ad return.</li>
+  <li>Add a hidden, empty field called <code>website</code> to your form. Bots fill it in and are ignored.</li>
+  <li>At most 10 enquiries per minute from one address are accepted, to stop spam floods.</li>
+</ul>
+<h3>More than one website</h3>
+<p>All your websites use the <strong>same address and the same key</strong>. You do not need anything new in CoolOps for each site.</p>
+<ol>
+  <li>On each website, point the enquiry form at <code>https://YOUR-APP-ADDRESS/api/leads/webhook</code> with the header <code>x-api-key</code>, exactly as above.</li>
+  <li>Add one more field to each site's form called <code>site</code>, set to that website's name, for example <code>melbourneaircon.com.au</code>. In most form plugins this is a hidden field with a fixed value.</li>
+  <li>Leads then show the website under their source, on the Leads board, in the table and on the lead page, so you can see which site brings in work.</li>
+</ol>
+<p>If a form leaves out <code>site</code> but sends straight from the visitor's browser, CoolOps reads the website's address from the request automatically. Sending <code>site</code> is still the most reliable way.</p>
+<p>If the forms send straight from the browser, list every website in <code>LEAD_WEBHOOK_ALLOWED_ORIGINS</code>, separated by commas, for example <code>https://coolingservicemelbourne.com.au,https://melbourneaircon.com.au</code>.</p>
+<h3>Who should connect it?</h3>
+<p>Give your web developer this section. The safest way is for your website's server to send the request (for example a WordPress form plugin with a "webhook" option, such as WPForms, Gravity Forms or Contact Form 7 with a webhook add-on), so the secret key is never visible in the browser.</p>
+<h3>Test it</h3>
+<pre><code>curl -X POST https://YOUR-APP-ADDRESS/api/leads/webhook \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_LEAD_WEBHOOK_SECRET" \
+  -d '{"name":"Test Lead","phone":"0400 000 000","suburb":"Richmond","site":"melbourneaircon.com.au"}'</code></pre>
+<p>A new lead called "Test Lead" should appear on the Leads board, showing <em>Website form · melbourneaircon.com.au</em>.</p>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 30 -->
+<section id="local">
+<h2>30. Try it on your own computer</h2>
+<p>Optional. Useful for testing changes before they go live.</p>
+<ol>
+  <li>Install <strong>Node.js 20 or newer</strong> from <a href="https://nodejs.org">nodejs.org</a> (the LTS version).</li>
+  <li>Install <strong>pnpm</strong>: open a terminal and run <code>npm install -g pnpm</code>.</li>
+  <li>Install <strong>PostgreSQL 16</strong>: on a Mac use <a href="https://postgresapp.com">Postgres.app</a>; on Windows use the installer from <a href="https://www.postgresql.org/download/windows/">postgresql.org</a> (remember the password you choose); on Linux <code>sudo apt install postgresql</code>. Create a database called <code>coolops</code>.</li>
+  <li>Unzip <code>coolops.zip</code>, open a terminal in the <code>coolops</code> folder and run:</li>
+</ol>
+<pre><code>pnpm install
+cp .env.example .env        # Windows: copy .env.example .env
+# open .env in a text editor: set DATABASE_URL to your database
+# and AUTH_SECRET to a random string
+pnpm prisma migrate dev     # creates the tables
+pnpm db:seed                # demo data and logins
+pnpm dev                    # starts the app</code></pre>
+<p>Open <a href="http://localhost:3000">http://localhost:3000</a> and log in with the demo logins from <a href="#data">section 8</a>. Stop it with <kbd>Ctrl</kbd>+<kbd>C</kbd>. Emails are printed in the terminal instead of being sent unless you set <code>RESEND_API_KEY</code>.</p>
+<p>Example <code>DATABASE_URL</code>: <code>postgresql://postgres:YOURPASSWORD@localhost:5432/coolops?schema=public</code></p>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 31 -->
+<section id="update">
+<h2>31. Updating the app</h2>
+<ol>
+  <li>Get the new code into your GitHub repository (commit and push, or GitHub Desktop → <span class="ui">Push origin</span>).</li>
+  <li>In Coolify open the app and click <span class="ui">Redeploy</span>. Or turn on <span class="ui">Auto Deploy</span> so every push to <code>main</code> deploys by itself.</li>
+  <li>When the app starts it updates the database structure automatically (<code>prisma migrate deploy</code>). Your data is kept.</li>
+</ol>
+<div class="callout warn"><strong>Before a big update</strong><p>Take a database backup first (next section). If a deploy fails, Coolify keeps the previous version running, and you can roll back from the <span class="ui">Deployments</span> list.</p></div>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 32 -->
+<section id="backup">
+<h2>32. Backups and restoring</h2>
+<h3>Database (most important)</h3>
+<ol>
+  <li>Open the PostgreSQL database in Coolify and go to <span class="ui">Backups</span>.</li>
+  <li>Add a scheduled backup, for example daily at 2 am (<code>0 2 * * *</code>), and keep at least 14.</li>
+  <li>Strongly recommended: add an <strong>S3 storage</strong> destination in Coolify (Cloudflare R2, Backblaze B2, AWS) so backups are stored off the server. If the server dies, backups on it die too.</li>
+  <li>Click <span class="ui">Backup now</span> once to check it works.</li>
+</ol>
+<h3>Restoring</h3>
+<p>From the database's <span class="ui">Backups</span> list choose a backup and restore it (or download it and import with <code>pg_restore</code> / <code>psql</code>). Restoring replaces the current data with the backup's, so only do it when you mean to.</p>
+<h3>Uploaded files</h3>
+<p>Photos, signatures and the logo live in the <code>/app/uploads</code> volume. Back up the server (most VPS providers offer snapshots) or use S3 storage for uploads (<code>STORAGE_DRIVER=s3</code>), which keeps files off the server.</p>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 33 -->
+<section id="trouble">
+<h2>33. Troubleshooting</h2>
+<div class="table-wrap"><table>
+<tr><th>Problem</th><th>What to check</th></tr>
+<tr><td>Can't log in at all after deploying</td><td>Did you run <code>pnpm db:seed</code> once (section 8)? Is <code>AUTH_SECRET</code> set? Do <code>AUTH_URL</code> and <code>APP_URL</code> match the address in your browser exactly, including <code>https://</code>?</td></tr>
+<tr><td>One person can't log in</td><td>Wrong password (an admin can set a new one in Team), or the user is marked inactive.</td></tr>
+<tr><td>Emails not arriving</td><td>Is <code>RESEND_API_KEY</code> set and the domain verified in Resend? Does <code>EMAIL_FROM</code> use that domain? Check spam. Check the Resend dashboard <span class="ui">Logs</span>. Does the client have an email address? (The Send button is disabled if not.)</td></tr>
+<tr><td>Build fails in Coolify</td><td>Read the deployment log from the bottom up. Common causes: build pack not set to Nixpacks, server out of memory (2 GB+ recommended), or <code>pnpm-lock.yaml</code> missing from the repository.</td></tr>
+<tr><td>"Can't reach database server"</td><td>Is the database running in Coolify? Is <code>DATABASE_URL</code> the <em>internal</em> URL, copied in full? Are the app and database in the same Coolify project/network?</td></tr>
+<tr><td>Photos or logo vanish after redeploy</td><td>The persistent volume at <code>/app/uploads</code> and <code>STORAGE_LOCAL_DIR=/app/uploads</code> are missing (section 5, step 4).</td></tr>
+<tr><td>Reminder emails not going out</td><td>Is the Scheduled Task set up? Click <span class="ui">Run now</span> and read the output. <code>401</code> means <code>CRON_SECRET</code> is not set on the app.</td></tr>
+<tr><td>Times look wrong</td><td>The app always shows Melbourne time. If the reminder task runs at the wrong hour, set the server timezone in Coolify or adjust the schedule (section 5, step 7).</td></tr>
+<tr><td>Website leads not arriving</td><td>Test with the curl command in section 29. <code>401</code> = wrong <code>x-api-key</code>. <code>400</code> = missing name or email/phone. <code>429</code> = too many requests. Browser-only forms also need <code>LEAD_WEBHOOK_ALLOWED_ORIGINS</code>.</td></tr>
+<tr><td>Invoice PDF shows no bank details or ABN</td><td>Fill in Settings → Business and Settings → Invoicing.</td></tr>
+<tr><td>A technician can't see a job</td><td>They only see jobs they are assigned to. Add them under Technicians on the job.</td></tr>
+<tr><td>Something else</td><td>Open the app in Coolify and check <span class="ui">Logs</span>. Error messages there say what went wrong.</td></tr>
+</table></div>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 34 -->
+<section id="faq">
+<h2>34. Questions and answers</h2>
+<h4>Do I need Docker?</h4>
+<p>No. Coolify builds and runs the container for you. There are no Docker files in the code on purpose.</p>
+<h4>Can clients log in?</h4>
+<p>Not with an account. They get private links to their quotes and invoices, where they can view, download, and accept or decline quotes.</p>
+<h4>Can clients pay by card online?</h4>
+<p>Not yet (see <a href="#later">section 36</a>). Record card payments taken on your EFTPOS terminal as "Card (EFTPOS)".</p>
+<h4>Can I continue my old invoice numbers?</h4>
+<p>Yes: Settings → Numbering → set the next invoice number.</p>
+<h4>I'm not registered for GST.</h4>
+<p>Untick <span class="ui">Registered for GST</span> in Settings → Invoicing. GST is no longer added and PDFs are titled "Invoice" instead of "Tax Invoice".</p>
+<h4>Can I delete an invoice?</h4>
+<p>Only drafts. Sent invoices are voided instead, so your numbering and records stay complete for tax.</p>
+<h4>How many users can I have?</h4>
+<p>As many as you like. There is no per-user cost.</p>
+<h4>Is my data safe?</h4>
+<p>Passwords are stored encrypted (hashed), every page checks the person's role, the site runs over HTTPS, and every change is recorded in the audit log. Keep daily off-server backups (section 32).</p>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 35 -->
+<section id="glossary">
+<h2>35. Glossary</h2>
+<div class="table-wrap"><table>
+<tr><th>Word</th><th>Meaning</th></tr>
+<tr><td>GST</td><td>Goods and Services Tax, 10% in Australia. "Ex GST" means before GST, "inc GST" means including it.</td></tr>
+<tr><td>ABN</td><td>Australian Business Number. Must be on tax invoices.</td></tr>
+<tr><td>Tax invoice</td><td>An invoice that meets ATO rules so your client can claim GST credits.</td></tr>
+<tr><td>Credit note</td><td>A document that reduces what a client owes on an invoice.</td></tr>
+<tr><td>Coolify</td><td>Software on your server that builds, runs and backs up apps and databases through a web page.</td></tr>
+<tr><td>Nixpacks</td><td>The tool Coolify uses to turn code into a running app without Docker files.</td></tr>
+<tr><td>Environment variable</td><td>A private setting (like a password or address) given to the app by Coolify, not stored in the code.</td></tr>
+<tr><td>Database / PostgreSQL</td><td>Where all records are stored. PostgreSQL is the database software.</td></tr>
+<tr><td>Migration</td><td>An update to the database structure. Runs automatically when the app starts.</td></tr>
+<tr><td>Seed</td><td>Loading starter/demo data. Wipes existing data.</td></tr>
+<tr><td>Webhook</td><td>A web address another system sends data to. Your website form uses one to send leads.</td></tr>
+<tr><td>Cron / scheduled task</td><td>Something that runs automatically on a timetable, like the daily reminders.</td></tr>
+<tr><td>Volume</td><td>A folder on the server that survives redeploys. Used for uploaded files.</td></tr>
+<tr><td>Deploy / redeploy</td><td>Building and starting the latest version of the app.</td></tr>
+<tr><td>UTM / gclid</td><td>Tags on ad links that tell you which ad or campaign an enquiry came from.</td></tr>
+</table></div>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 36 -->
+<section id="later">
+<h2>36. Not built yet</h2>
+<p>The database is ready for these, and the <span class="ui">Integrations</span> page lists them, but they do not work yet:</p>
+<ul>
+  <li><strong>Stripe card payments</strong>: a "Pay now" button on invoices with automatic payment recording.</li>
+  <li><strong>SMS</strong> (Twilio or MessageMedia): "on my way" and reminder texts.</li>
+  <li><strong>Xero / MYOB live sync</strong> (the Xero CSV export does work).</li>
+  <li><strong>Inventory and van stock</strong>.</li>
+  <li><strong>Client portal</strong> with client logins.</li>
+  <li><strong>Google Calendar sync</strong> for technicians.</li>
+</ul>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 37 -->
+<section id="dev">
+<h2>37. For developers</h2>
+<p><strong>Stack:</strong> Next.js 15 (App Router, TypeScript strict), PostgreSQL + Prisma 6, Auth.js v5, Tailwind v4 + shadcn/ui, TanStack Table, FullCalendar, dnd-kit, Recharts, React PDF, Resend + React Email, Vitest. Money is integer cents; GST logic in <code>src/lib/money.ts</code>; Melbourne time helpers in <code>src/lib/dates.ts</code>.</p>
+<div class="table-wrap"><table>
+<tr><th>Command</th><th>What it does</th></tr>
+<tr><td><code>pnpm dev</code> / <code>build</code> / <code>start</code></td><td>Run in development, build, run the build</td></tr>
+<tr><td><code>pnpm lint</code></td><td>ESLint, zero warnings allowed</td></tr>
+<tr><td><code>pnpm typecheck</code></td><td>TypeScript check</td></tr>
+<tr><td><code>pnpm test</code></td><td>Vitest unit tests</td></tr>
+<tr><td><code>pnpm format</code></td><td>Prettier</td></tr>
+<tr><td><code>pnpm db:migrate</code> / <code>db:deploy</code> / <code>db:seed</code> / <code>db:reset</code> / <code>db:studio</code></td><td>Prisma: new migration, apply migrations, demo data, wipe and rebuild, browse data</td></tr>
+<tr><td><code>pnpm cron:reminders</code></td><td>Call the daily reminders endpoint on the running app</td></tr>
+</table></div>
+<pre><code>prisma/              schema, migrations, seed
+nixpacks.toml        Coolify build: Node 22, migrate on start
+scripts/             cron-reminders.mjs
+src/app/(auth)       login
+src/app/(app)        staff app pages
+src/app/(public)     client quote (/q/[token]) and invoice (/i/[token]) pages
+src/app/api          auth, lead webhook, PDFs, report CSVs, Xero export, cron, files
+src/server/&lt;module&gt;  queries.ts (reads) and actions.ts (validated, permission-checked writes)
+src/lib              money, dates, numbering, permissions, storage, email, PDF
+src/components       UI
+src/emails           email templates</code></pre>
+<p>Permissions are enforced in middleware, in <code>src/lib/permissions.ts</code>, in every server action, and in the UI.</p>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+</main>
+</div>
+<footer>CoolOps Guide · Cooling Service Melbourne</footer>
+</body>
+</html>
