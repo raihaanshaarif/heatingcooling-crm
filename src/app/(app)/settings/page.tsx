@@ -3,10 +3,18 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { resolveTemplates } from "@/lib/email/templates";
+import { getSmsConfig, SMS_PROVIDER_LABELS } from "@/lib/sms";
+import { resolveSmsSettings } from "@/lib/sms/templates";
+import { addMelbourneDays } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { getSettings } from "@/server/settings";
 import { templateItems } from "@/server/jobs/service";
 import { listTeam } from "@/server/team/queries";
+import { listSmsLog, smsStats } from "@/server/sms/queries";
+import { SMS_KIND_LABELS } from "@/server/sms/service";
+import { Badge } from "@/components/ui/badge";
+import { SmsSettingsForm } from "@/components/sms/sms-settings-form";
+import { SMS_STATUS_LABELS, SmsLogTable } from "@/components/sms/sms-log-table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/shared/page-header";
 import { NewRecordDialog } from "@/components/shared/new-record-dialog";
@@ -29,6 +37,8 @@ const TABS = [
   { value: "invoicing", label: "Invoicing" },
   { value: "numbering", label: "Numbering" },
   { value: "email", label: "Email templates" },
+  { value: "sms", label: "SMS" },
+  { value: "sms-log", label: "SMS log" },
   { value: "checklists", label: "Checklists" },
   { value: "users", label: "Users" },
 ] as const;
@@ -36,10 +46,10 @@ const TABS = [
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; status?: string }>;
 }) {
   await requirePermission("view", "settings");
-  const { tab: requested } = await searchParams;
+  const { tab: requested, status: statusParam } = await searchParams;
   const tab = TABS.some((t) => t.value === requested) ? requested! : "business";
   const settings = await getSettings();
 
@@ -147,6 +157,73 @@ export default async function SettingsPage({
         </CardContent>
       </Card>
     );
+  } else if (tab === "sms") {
+    const config = getSmsConfig();
+    content = (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            SMS texts
+            {config.provider === "console" ? (
+              <Badge variant="warning">Provider not set up</Badge>
+            ) : (
+              <Badge variant="success">{SMS_PROVIDER_LABELS[config.provider]}</Badge>
+            )}
+          </CardTitle>
+          <CardDescription>
+            Choose which texts go to clients automatically and what they say. Clients marked{" "}
+            <em>No SMS</em> are never texted.{" "}
+            {config.provider === "console" ? (
+              <>
+                Until a provider is connected (see{" "}
+                <Link href="/integrations" className="underline">
+                  Integrations
+                </Link>
+                ), texts are written to the SMS log but not sent.
+              </>
+            ) : (
+              "Each SMS segment (160 characters, or 70 with emoji) is billed by your provider."
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SmsSettingsForm settings={resolveSmsSettings(settings.smsSettings)} />
+        </CardContent>
+      </Card>
+    );
+  } else if (tab === "sms-log") {
+    const status = (["SENT", "LOGGED", "SKIPPED", "FAILED"] as const).find(
+      (s) => s === statusParam,
+    );
+    const [rows, stats] = await Promise.all([
+      listSmsLog({ status }),
+      smsStats(addMelbourneDays(new Date(), -30)),
+    ]);
+    const sentSegments = (stats.SENT?.segments ?? 0) + (stats.FAILED?.segments ?? 0);
+    content = (
+      <div className="space-y-4">
+        <p className="text-muted-foreground text-sm">
+          Last 30 days: {stats.SENT?.count ?? 0} sent ({sentSegments} SMS segments billed at most),{" "}
+          {stats.LOGGED?.count ?? 0} logged only, {stats.SKIPPED?.count ?? 0} not sent,{" "}
+          {stats.FAILED?.count ?? 0} failed.
+        </p>
+        <nav className="flex flex-wrap gap-1" aria-label="Filter by status">
+          {[undefined, "SENT", "LOGGED", "SKIPPED", "FAILED"].map((s) => (
+            <Link
+              key={s ?? "all"}
+              href={`/settings?tab=sms-log${s ? `&status=${s}` : ""}`}
+              className={cn(
+                "rounded-md border px-2.5 py-1 text-xs",
+                status === s ? "bg-primary text-primary-foreground" : "hover:bg-muted",
+              )}
+            >
+              {s ? SMS_STATUS_LABELS[s as keyof typeof SMS_STATUS_LABELS] : "All"}
+            </Link>
+          ))}
+        </nav>
+        <SmsLogTable rows={rows} kindLabels={SMS_KIND_LABELS} />
+      </div>
+    );
   } else if (tab === "checklists") {
     const templates = await db.jobChecklistTemplate.findMany({ orderBy: { name: "asc" } });
     content = (
@@ -194,7 +271,7 @@ export default async function SettingsPage({
           </Link>
         ))}
       </nav>
-      <div className="max-w-4xl">{content}</div>
+      <div className={tab === "sms-log" ? "max-w-6xl" : "max-w-4xl"}>{content}</div>
     </>
   );
 }

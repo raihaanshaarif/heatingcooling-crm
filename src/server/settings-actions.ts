@@ -12,6 +12,7 @@ import {
   emailTemplatesSchema,
   invoicingSettingsSchema,
   numberingSettingsSchema,
+  smsSettingsSchema,
 } from "@/lib/validations/settings";
 import {
   NotFoundError,
@@ -93,6 +94,14 @@ export async function saveEmailTemplates(input: z.input<typeof emailTemplatesSch
     { schema: emailTemplatesSchema, permission: ["update", "settings"] },
     input,
     (d, user) => updateSettings("emailTemplates", { emailTemplates: d }, user.id),
+  );
+}
+
+export async function saveSmsSettings(input: z.input<typeof smsSettingsSchema>) {
+  return runAction(
+    { schema: smsSettingsSchema, permission: ["update", "settings"] },
+    input,
+    (d, user) => updateSettings("sms", { smsSettings: d }, user.id),
   );
 }
 

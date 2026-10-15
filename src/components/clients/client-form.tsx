@@ -39,6 +39,7 @@ export function ClientForm({ client, onDone }: { client?: Client; onDone?: () =>
       tags: client?.tags ?? [],
       source: client?.source ?? null,
       doNotService: client?.doNotService ?? false,
+      noSms: client?.noSms ?? false,
       createPropertyFromBilling: !client,
     },
   });
@@ -127,6 +128,11 @@ export function ClientForm({ client, onDone }: { client?: Client; onDone?: () =>
           name="doNotService"
           label="Do not service"
           description="Warn the office when booking work for this client."
+        />
+        <SwitchField
+          name="noSms"
+          label="No SMS"
+          description="The client asked not to be texted. No reminders, on-my-way or one-off texts."
         />
         <TextareaField name="notes" label="Notes" rows={3} />
         <div className="flex justify-end">

@@ -195,6 +195,7 @@ enum ReminderType {
   QUOTE_FOLLOW_UP
   LICENCE_EXPIRY
   WARRANTY_EXPIRY
+  APPOINTMENT_REMINDER
 }
 
 enum ReminderChannel {
@@ -208,6 +209,23 @@ enum ReminderStatus {
   SENT
   FAILED
   CANCELLED
+}
+
+enum SmsKind {
+  ON_MY_WAY
+  APPOINTMENT_REMINDER
+  SERVICE_DUE
+  INVOICE_OVERDUE
+  MANUAL
+}
+
+/// SENT = accepted by the provider; LOGGED = console provider (not configured, printed only);
+/// SKIPPED = not sent on purpose (opted out, no mobile number…); FAILED = the provider refused.
+enum SmsStatus {
+  SENT
+  LOGGED
+  SKIPPED
+  FAILED
 }
 
 enum StockLocationType {
@@ -261,6 +279,7 @@ model User {
   van              StockLocation?
   stockMovements   StockMovement[]
   stockReceipts    StockReceipt[]
+  smsSent          SmsMessage[]        @relation("SmsSentBy")
 
   @@index([role, active])
 }
@@ -345,6 +364,7 @@ model Client {
   tags            String[]    @default([])
   source          LeadSource?
   doNotService    Boolean     @default(false)
+  noSms           Boolean     @default(false) // client asked not to be texted
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   deletedAt       DateTime?
@@ -357,6 +377,7 @@ model Client {
   invoices         Invoice[]
   payments         Payment[]
   maintenancePlans MaintenancePlan[]
+  smsMessages      SmsMessage[]
 
   @@index([name])
   @@index([email])
@@ -640,6 +661,7 @@ model Job {
   timeEntries     TimeEntry[]
   invoices        Invoice[]
   stockMovements  StockMovement[]
+  smsMessages     SmsMessage[]
 
   @@index([clientId])
   @@index([status])
@@ -796,6 +818,7 @@ model Invoice {
   lineItems   InvoiceLineItem[]
   payments    Payment[]
   creditNotes CreditNote[]
+  smsMessages SmsMessage[]
 
   @@index([clientId])
   @@index([status])
@@ -1044,6 +1067,38 @@ model StockMovement {
   @@index([createdAt])
 }
 
+// ─── SMS ─────────────────────────────────────────────────────────────────────
+// Every text (sent, logged by the console provider, skipped or failed) is one row.
+
+model SmsMessage {
+  id                String    @id @default(cuid())
+  kind              SmsKind
+  status            SmsStatus
+  to                String? // E.164 (+61…) when the number was valid
+  rawPhone          String? // what was on the record
+  body              String
+  segments          Int       @default(1)
+  provider          String // twilio | messagemedia | console | none
+  providerMessageId String?
+  error             String? // failure or skip reason
+  clientId          String?
+  jobId             String?
+  invoiceId         String?
+  maintenancePlanId String?
+  sentById          String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  client  Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  job     Job?     @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  invoice Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  sentBy  User?    @relation("SmsSentBy", fields: [sentById], references: [id], onDelete: SetNull)
+
+  @@index([clientId, createdAt])
+  @@index([jobId])
+  @@index([createdAt])
+}
+
 // ─── System ──────────────────────────────────────────────────────────────────
 
 model Notification {
@@ -1106,6 +1161,7 @@ model BusinessSettings {
   invoiceFooter           String?
   quoteTerms              String?
   emailTemplates          Json?
+  smsSettings             Json? // { enabled: { onMyWay: true, … }, templates: { onMyWay: "…", … } }
   timezone                String       @default("Australia/Melbourne")
   createdAt               DateTime     @default(now())
   updatedAt               DateTime     @updatedAt

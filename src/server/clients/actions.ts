@@ -25,6 +25,7 @@ function clientData(d: z.output<typeof clientSchema>) {
     tags: [...new Set(d.tags)],
     source: d.source,
     doNotService: d.doNotService || d.tags.includes("Do not service"),
+    noSms: d.noSms,
   };
 }
 

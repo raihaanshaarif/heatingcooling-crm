@@ -45,6 +45,15 @@ import {
   toDateInput,
 } from "../src/lib/dates";
 import { DEFAULT_EMAIL_TEMPLATES } from "../src/lib/email/templates";
+import { pickMobile } from "../src/lib/sms/phone";
+import { countSegments } from "../src/lib/sms/segments";
+import {
+  DEFAULT_SMS_ENABLED,
+  DEFAULT_SMS_TEMPLATES,
+  firstName,
+  greetingName,
+  renderSms,
+} from "../src/lib/sms/templates";
 import { addQty, levelsFromMovements, stockStatus } from "../src/lib/inventory";
 
 const prisma = new PrismaClient();
@@ -699,6 +708,7 @@ interface ClientSeed {
   tags?: string[];
   source?: LeadSource;
   doNotService?: boolean;
+  noSms?: boolean;
   notes?: string;
   billing?: { line1: string; suburb: string; postcode: string };
   contacts?: ContactSeed[];
@@ -903,6 +913,7 @@ const CLIENTS: ClientSeed[] = [
     key: "fraser",
     type: "RESIDENTIAL",
     name: "Daniel Fraser",
+    noSms: true,
     email: "dan.fraser@gmail.com",
     source: "WEBSITE",
     createdMonthsAgo: 3,
@@ -2064,6 +2075,257 @@ async function seedInventory(users: {
   return { items: STOCK.length, movements: movements.length, low };
 }
 
+// ─── SMS ────────────────────────────────────────────────────────────────────
+// No provider is configured in the demo, so texts are LOGGED (written to the log, not sent),
+// exactly what the app records with the console provider.
+
+async function seedSms(officeId: string): Promise<number> {
+  const biz = await prisma.businessSettings.findUniqueOrThrow({ where: { id: "singleton" } });
+  const t = DEFAULT_SMS_TEMPLATES;
+  const clientInclude = {
+    contacts: { orderBy: [{ isPrimary: "desc" as const }, { createdAt: "asc" as const }] },
+  };
+  const rows: Prisma.SmsMessageCreateManyInput[] = [];
+  const activities: Prisma.ActivityCreateManyInput[] = [];
+  const reminders: Prisma.ReminderCreateManyInput[] = [];
+  const LABEL = {
+    ON_MY_WAY: "On my way",
+    APPOINTMENT_REMINDER: "Appointment reminder",
+    SERVICE_DUE: "Service due",
+    MANUAL: "One-off",
+  } as const;
+
+  function add(input: {
+    kind: keyof typeof LABEL;
+    client: {
+      id: string;
+      type: string;
+      name: string;
+      phone: string | null;
+      altPhone: string | null;
+      noSms: boolean;
+      contacts: { name: string; phone: string | null }[];
+    };
+    template: string;
+    vars: Record<string, string>;
+    at: Date;
+    jobId?: string;
+    planId?: string;
+    sentById?: string | null;
+  }) {
+    const { client } = input;
+    const body = renderSms(input.template, {
+      clientName: greetingName(client),
+      businessName: biz.tradingName || biz.businessName,
+      businessPhone: biz.phone ?? "",
+      ...input.vars,
+    });
+    const recipient = pickMobile([
+      client.phone,
+      client.altPhone,
+      ...client.contacts.map((c) => c.phone),
+    ]);
+    const reason = client.noSms
+      ? "Client has opted out of SMS (No SMS)"
+      : recipient.ok
+        ? null
+        : recipient.reason;
+    const to = recipient.ok ? recipient.e164 : null;
+    rows.push({
+      kind: input.kind,
+      status: reason ? "SKIPPED" : "LOGGED",
+      to,
+      rawPhone: recipient.raw,
+      body,
+      segments: countSegments(body).segments,
+      provider: reason ? "none" : "console",
+      error: reason,
+      clientId: client.id,
+      jobId: input.jobId ?? null,
+      maintenancePlanId: input.planId ?? null,
+      sentById: input.sentById ?? null,
+      createdAt: input.at,
+    });
+    const who = to ? `0${to.slice(3, 6)} ${to.slice(6, 9)} ${to.slice(9)}` : "no number";
+    activities.push({
+      entityType: input.jobId ? "JOB" : "CLIENT",
+      entityId: input.jobId ?? client.id,
+      type: "SMS",
+      body: `${LABEL[input.kind]} text ${reason ? `not sent: ${reason}` : `logged for ${who} (SMS not set up, not sent)`}\n“${body}”`,
+      userId: input.sentById ?? null,
+      createdAt: input.at,
+    });
+  }
+
+  const jobInclude = {
+    client: { include: clientInclude },
+    property: true,
+    assignments: {
+      include: { user: { select: { id: true, name: true } } },
+      orderBy: { createdAt: "asc" as const },
+    },
+  };
+  const jobVars = (j: {
+    number: string;
+    title: string;
+    scheduledStart: Date | null;
+    property: { addressLine1: string; suburb: string } | null;
+    assignments: { user: { name: string } }[];
+  }) => ({
+    jobNumber: j.number,
+    jobTitle: j.title,
+    techName: firstName(j.assignments[0]?.user.name) || "our technician",
+    address: j.property ? `${j.property.addressLine1}, ${j.property.suburb}` : "",
+    suburb: j.property?.suburb ?? "",
+    date: j.scheduledStart
+      ? j.scheduledStart.toLocaleDateString("en-AU", {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+          timeZone: "Australia/Melbourne",
+        })
+      : "",
+    time: j.scheduledStart
+      ? j.scheduledStart
+          .toLocaleTimeString("en-AU", {
+            hour: "numeric",
+            minute: "2-digit",
+            timeZone: "Australia/Melbourne",
+          })
+          .replace(" ", "")
+      : "",
+  });
+
+  // Visits in the last three days that the technician started: an appointment reminder the
+  // day before (8am) and an on-my-way text when they set off.
+  const visits = await prisma.job.findMany({
+    where: {
+      deletedAt: null,
+      enRouteAt: { not: null },
+      scheduledStart: { gte: addMelbourneDays(TODAY_START, -3), lte: NOW },
+    },
+    include: jobInclude,
+    orderBy: { scheduledStart: "asc" },
+    take: 8,
+  });
+  for (const j of visits) {
+    const day = startOfMelbourneDay(j.scheduledStart!);
+    add({
+      kind: "APPOINTMENT_REMINDER",
+      client: j.client,
+      template: t.appointmentReminder,
+      vars: jobVars(j),
+      at: addMinutes(addMelbourneDays(day, -1), 8 * 60 + 1),
+      jobId: j.id,
+    });
+    reminders.push({
+      key: `APPOINTMENT_REMINDER:${j.id}:${toDateInput(j.scheduledStart)}`,
+      type: "APPOINTMENT_REMINDER",
+      entityType: "JOB",
+      entityId: j.id,
+      channel: "SMS",
+      status: "SENT",
+      dueAt: addMinutes(addMelbourneDays(day, -1), 8 * 60),
+      sentAt: addMinutes(addMelbourneDays(day, -1), 8 * 60 + 1),
+    });
+    add({
+      kind: "ON_MY_WAY",
+      client: j.client,
+      template: t.onMyWay,
+      vars: jobVars(j),
+      at: j.enRouteAt!,
+      jobId: j.id,
+      sentById: j.assignments[0]?.user.id ?? null,
+    });
+  }
+
+  // Office: a one-off "running late" text for the next job today.
+  const later = await prisma.job.findFirst({
+    where: {
+      deletedAt: null,
+      status: "SCHEDULED",
+      scheduledStart: { gte: NOW, lt: addMelbourneDays(TODAY_START, 1) },
+      client: { noSms: false },
+    },
+    include: jobInclude,
+    orderBy: { scheduledStart: "asc" },
+  });
+  if (later) {
+    add({
+      kind: "MANUAL",
+      client: later.client,
+      template: t.runningLate,
+      vars: jobVars(later),
+      at: addMinutes(NOW, -35),
+      jobId: later.id,
+      sentById: officeId,
+    });
+  }
+
+  // Service-due text for the plan due soonest within the 14-day window.
+  const plan = await prisma.maintenancePlan.findFirst({
+    where: {
+      active: true,
+      nextDueDate: { gte: TODAY_START, lte: addMelbourneDays(TODAY_START, 14) },
+      client: { deletedAt: null, doNotService: false },
+    },
+    include: { client: { include: clientInclude } },
+    orderBy: { nextDueDate: "asc" },
+  });
+  if (plan) {
+    const at = addMinutes(TODAY_START, 8 * 60 + 2);
+    add({
+      kind: "SERVICE_DUE",
+      client: plan.client,
+      template: t.serviceDue,
+      vars: {
+        planName: plan.name,
+        dueDate: plan.nextDueDate.toLocaleDateString("en-AU", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+          timeZone: "Australia/Melbourne",
+        }),
+      },
+      at: at < NOW ? at : addMinutes(NOW, -5),
+      planId: plan.id,
+    });
+    reminders.push({
+      key: `SERVICE_DUE:${plan.id}:${toDateInput(plan.nextDueDate)}:SMS`,
+      type: "SERVICE_DUE",
+      entityType: "MAINTENANCE_PLAN",
+      entityId: plan.id,
+      channel: "SMS",
+      status: "SENT",
+      dueAt: at,
+      sentAt: at,
+    });
+  }
+
+  // The opted-out client: their on-my-way text was skipped (shows why on the job).
+  const optedOut = await prisma.job.findFirst({
+    where: { deletedAt: null, enRouteAt: { not: null }, client: { noSms: true } },
+    include: jobInclude,
+    orderBy: { scheduledStart: "desc" },
+  });
+  if (optedOut) {
+    add({
+      kind: "ON_MY_WAY",
+      client: optedOut.client,
+      template: t.onMyWay,
+      vars: jobVars(optedOut),
+      at: optedOut.enRouteAt!,
+      jobId: optedOut.id,
+      sentById: optedOut.assignments[0]?.user.id ?? null,
+    });
+  }
+
+  await prisma.smsMessage.createMany({ data: rows });
+  await prisma.activity.createMany({ data: activities });
+  await prisma.reminder.createMany({ data: reminders, skipDuplicates: true });
+  return rows.length;
+}
+
 // ─── Seed ───────────────────────────────────────────────────────────────────
 
 async function resetDatabase(): Promise<void> {
@@ -2231,6 +2493,7 @@ async function main(): Promise<void> {
         "7. Cancellations within 48 hours of a booked installation may incur a re-booking fee of $150.",
       ].join("\n"),
       emailTemplates: toJson(DEFAULT_EMAIL_TEMPLATES),
+      smsSettings: toJson({ enabled: DEFAULT_SMS_ENABLED, templates: DEFAULT_SMS_TEMPLATES }),
     },
   });
 
@@ -2294,6 +2557,7 @@ async function main(): Promise<void> {
         tags: c.tags ?? [],
         source: c.source ?? null,
         doNotService: c.doNotService ?? false,
+        noSms: c.noSms ?? false,
         createdAt,
         contacts: c.contacts
           ? {
@@ -4769,6 +5033,9 @@ async function main(): Promise<void> {
   // ── Inventory: suppliers, warehouse + vans, stock history and job usage ──
   const inventory = await seedInventory({ admin, office, tech1, tech2 });
 
+  // ── SMS log: on-my-way and appointment texts for recent visits, a one-off, a service-due ──
+  const smsCount = await seedSms(office.id);
+
   // ── Notifications ──
   const newestWebLead = [...leadRecords].reverse().find((l) => l.spec.status === "NEW");
   const acceptedQuote = [...quoteRecords]
@@ -4881,6 +5148,7 @@ async function main(): Promise<void> {
     stockedParts: inventory.items,
     stockMovements: inventory.movements,
     lowStock: inventory.low.length,
+    smsLogged: smsCount,
   };
   console.log("\nSeed complete in", ((Date.now() - started) / 1000).toFixed(1), "s");
   console.table(counts);

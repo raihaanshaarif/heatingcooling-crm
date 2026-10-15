@@ -3,6 +3,8 @@ import Link from "next/link";
 import { CalendarDays, Download, Globe, Mail, MessageSquare, Package } from "lucide-react";
 import { requirePermission } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { addMelbourneDays } from "@/lib/dates";
+import { getSmsConfig, SMS_PROVIDER_LABELS } from "@/lib/sms";
 import { isGoogleCalendarConfigured } from "@/lib/integrations/google-calendar";
 import { appUrl } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +23,13 @@ function Status({ ready, phase }: { ready: boolean; phase?: string }) {
 export default async function IntegrationsPage() {
   await requirePermission("view", "settings");
   const inventoryTracked = await db.inventoryItem.count({ where: { active: true } });
+  const sms = getSmsConfig();
+  const smsLast30 = await db.smsMessage.count({
+    where: {
+      createdAt: { gte: addMelbourneDays(new Date(), -30) },
+      status: { in: ["SENT", "LOGGED"] },
+    },
+  });
   const webhookUrl = appUrl("/api/leads/webhook");
   const items = [
     {
@@ -63,8 +72,47 @@ export default async function IntegrationsPage() {
     {
       icon: MessageSquare,
       title: "SMS (Twilio / MessageMedia)",
-      status: <Status ready={false} phase="Phase 2" />,
-      body: "On-my-way texts and appointment / service reminders. Provider interface in src/lib/sms.",
+      status:
+        sms.provider === "console" ? (
+          <Badge variant="warning">Not set up</Badge>
+        ) : (
+          <Badge variant="success">{SMS_PROVIDER_LABELS[sms.provider]}</Badge>
+        ),
+      body: (
+        <>
+          On-my-way texts, appointment reminders the day before, service-due reminders and
+          (optional) overdue-invoice texts, plus one-off texts from client and job pages.{" "}
+          {sms.provider === "console" ? (
+            <>
+              {sms.requested
+                ? `SMS_PROVIDER is ${sms.requested} but ${sms.missing.join(", ")} ${sms.missing.length === 1 ? "is" : "are"} missing. `
+                : "No provider yet. "}
+              Texts are written to the SMS log but not sent. To connect: create a{" "}
+              <strong>MessageMedia</strong> account (Australian, sinch.com/messagemedia) and add{" "}
+              <code className="bg-muted rounded px-1">SMS_PROVIDER=messagemedia</code>,{" "}
+              <code className="bg-muted rounded px-1">MESSAGEMEDIA_API_KEY</code> and{" "}
+              <code className="bg-muted rounded px-1">MESSAGEMEDIA_API_SECRET</code>; or a{" "}
+              <strong>Twilio</strong> account with{" "}
+              <code className="bg-muted rounded px-1">SMS_PROVIDER=twilio</code>,{" "}
+              <code className="bg-muted rounded px-1">TWILIO_ACCOUNT_SID</code>,{" "}
+              <code className="bg-muted rounded px-1">TWILIO_AUTH_TOKEN</code> and{" "}
+              <code className="bg-muted rounded px-1">SMS_FROM</code> (your Twilio number, sender
+              name or Messaging Service SID). Then redeploy.
+            </>
+          ) : (
+            `Sending from ${sms.provider === "twilio" ? (sms.messagingServiceSid ?? sms.from) : (sms.from ?? "MessageMedia's shared number")}.`
+          )}{" "}
+          {smsLast30 > 0 && `${smsLast30} text${smsLast30 === 1 ? "" : "s"} in the last 30 days.`}
+          <span className="mt-2 flex gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link href="/settings?tab=sms">SMS settings</Link>
+            </Button>
+            <Button asChild size="sm" variant="ghost">
+              <Link href="/settings?tab=sms-log">SMS log</Link>
+            </Button>
+          </span>
+        </>
+      ),
     },
     {
       icon: CalendarDays,
@@ -104,7 +152,7 @@ export default async function IntegrationsPage() {
     <>
       <PageHeader
         title="Integrations"
-        description="Connections to other services. Phase 2 and 3 items are planned and stubbed in the code."
+        description="Connections to other services. Phase 3 items are planned and stubbed in the code."
       />
       <div className="grid gap-4 md:grid-cols-2">
         {items.map((i) => (

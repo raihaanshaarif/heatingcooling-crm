@@ -31,14 +31,14 @@ Technicians land on **My Jobs**, a phone-first view with big _On my way / Start 
 
 ## Scripts
 
-| Command                                                                | What it does                                                                                                  |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `pnpm dev` / `build` / `start`                                         | Next.js                                                                                                       |
-| `pnpm lint`                                                            | ESLint, zero warnings allowed                                                                                 |
-| `pnpm typecheck`                                                       | `tsc --noEmit`                                                                                                |
-| `pnpm test`                                                            | Vitest: money/GST, numbering, permissions, invoice status, dates, rate limiting, lead validation, stock logic |
-| `pnpm format`                                                          | Prettier                                                                                                      |
-| `pnpm db:migrate` / `db:deploy` / `db:seed` / `db:reset` / `db:studio` | Prisma                                                                                                        |
+| Command                                                                | What it does                                                                                                       |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `pnpm dev` / `build` / `start`                                         | Next.js                                                                                                            |
+| `pnpm lint`                                                            | ESLint, zero warnings allowed                                                                                      |
+| `pnpm typecheck`                                                       | `tsc --noEmit`                                                                                                     |
+| `pnpm test`                                                            | Vitest: money/GST, numbering, permissions, invoice status, dates, rate limiting, lead validation, stock logic, SMS |
+| `pnpm format`                                                          | Prettier                                                                                                           |
+| `pnpm db:migrate` / `db:deploy` / `db:seed` / `db:reset` / `db:studio` | Prisma                                                                                                             |
 
 ## Website enquiry form → leads
 
@@ -85,6 +85,34 @@ Stock of common parts (capacitors, filters, refrigerant in kg, drain pumps, isol
 
 No environment variables are needed.
 
+## SMS texts
+
+Clients get texts from the business (each one can be switched off and reworded under **Settings → SMS**, admin only):
+
+| Text                       | When                                                                         | Default |
+| -------------------------- | ---------------------------------------------------------------------------- | ------- |
+| On my way                  | A technician taps **On my way** (tech first name + business name)            | On      |
+| Appointment reminder       | Daily reminder run, for every _Scheduled_ job tomorrow (once per job + date) | On      |
+| Service due                | Daily run, plans due within 14 days, alongside the email (once per due date) | On      |
+| Overdue invoice            | Daily run, at 1, 7 and 14 days overdue, alongside the email                  | Off     |
+| One-off (office and admin) | **SMS** button on a client or job page: template picker, live count, send    |         |
+
+- Templates use the same `{{placeholder}}` style as email templates; the editor shows a live preview with the character and SMS-segment count (160 characters per SMS, 70 if it contains emoji). Curly quotes and dashes are converted to plain ones before sending so they don't double the cost.
+- Numbers are normalised to E.164 (`0412 345 678` → `+61412345678`). The client's phone, then alt. phone, then their primary contact's phone is tried; landlines, 13/1300/1800 and invalid numbers are skipped with the reason recorded.
+- **No SMS** on a client (Edit client) stops every text to them. _Do not service_ clients get no appointment or service-due texts (same as the emails); on-my-way, overdue and one-off texts still work.
+- Every text (sent, logged, skipped or failed) is stored in `SmsMessage` with the provider message id or error, and shows on the job / invoice / client timeline. Admins see everything under **Settings → SMS log**. Dedupe for the cron texts uses the `Reminder` table (channel `SMS`) like the email reminders.
+- Code: `src/lib/sms` (phone normalisation, segment counting, templates, Twilio / MessageMedia request building; all unit-tested with a mocked `fetch`), `src/server/sms` (sending + logging, actions, queries).
+
+| Variable                                           | What                                                                                                                                                                              |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SMS_PROVIDER`                                     | `messagemedia` or `twilio`. Empty: texts are logged (status _Logged only_) and printed to the server console, never sent.                                                         |
+| `MESSAGEMEDIA_API_KEY` / `MESSAGEMEDIA_API_SECRET` | MessageMedia REST API basic-auth key (MessageMedia Hub → Settings → API settings).                                                                                                |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN`         | Twilio Console → Account info.                                                                                                                                                    |
+| `SMS_FROM`                                         | Sender: a number (`+614…`), an alphanumeric sender ID (max 11 chars, no replies) or, for Twilio, a Messaging Service SID (`MG…`). Required for Twilio, optional for MessageMedia. |
+| `TWILIO_MESSAGING_SERVICE_SID`                     | Optional alternative to `SMS_FROM` for Twilio.                                                                                                                                    |
+
+If the provider is chosen but a credential is missing, the app falls back to logging and the Integrations page says which variable is missing. The real Twilio / MessageMedia APIs were not called during development (no credentials); request building and response parsing are covered by tests.
+
 ## How the money works
 
 - All amounts are integer cents. GST is 10%, applied per line (each line can be GST-free) and calculated once on the taxable subtotal so rounding never drifts. Logic lives in `src/lib/money.ts` with tests.
@@ -99,7 +127,8 @@ No environment variables are needed.
 1. marks invoices overdue and emails reminders at 1, 7 and 14 days overdue (each once),
 2. emails clients whose maintenance plan is due within 14 days and tells the office,
 3. warns about technician licences (ARC, gas, electrical…) and equipment warranties expiring within 30 days,
-4. expires quotes past their valid-until date.
+4. expires quotes past their valid-until date,
+5. texts (SMS) clients with a job scheduled tomorrow, clients whose plan is due within 14 days, and, if switched on, overdue invoices (see SMS texts below).
 
 Every reminder is de-duplicated, so running it twice does nothing extra. On Coolify it runs as a scheduled task (see Deploy below); `pnpm cron:reminders` calls the endpoint from inside the app container.
 
@@ -117,6 +146,7 @@ Coolify builds and runs the container itself with Nixpacks, so the repo has no D
    - `AUTH_URL` and `APP_URL`: your domain, e.g. `https://app.coolingservicemelbourne.com.au`.
    - `RESEND_API_KEY` and `EMAIL_FROM` (a domain verified in Resend).
    - `LEAD_WEBHOOK_SECRET` and `CRON_SECRET`: long random strings.
+   - Optional SMS: `SMS_PROVIDER` plus the provider's keys and `SMS_FROM` (see SMS texts above).
    - `TZ=Australia/Melbourne` is optional; the app always uses Melbourne time anyway.
 4. **File uploads** (job photos, signatures, logo). Easiest: keep `STORAGE_DRIVER=local`, set `STORAGE_LOCAL_DIR=/app/uploads`, and in the app's _Storages_ tab add a persistent volume mounted at `/app/uploads` so files survive redeploys. Or use `STORAGE_DRIVER=s3` with Cloudflare R2 / S3.
 5. **Domain.** Set it under the app's _Domains_. Coolify issues the HTTPS certificate.
@@ -143,6 +173,5 @@ Permissions are enforced in four places: middleware (routes), `src/lib/permissio
 
 The database schema already covers these; code entry points are marked `TODO(Phase 2)` / `TODO(Phase 3)` and listed on the in-app _Integrations_ page.
 
-- **SMS** (Twilio or MessageMedia): on-my-way and reminder texts. `src/lib/sms`.
 - **Xero / MYOB sync**: a Xero import CSV works today (`/api/export/xero`); live API sync is Phase 3. `src/lib/integrations/accounting.ts`.
 - **Google Calendar sync** for technicians. `src/lib/integrations/google-calendar.ts`.

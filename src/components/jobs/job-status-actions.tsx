@@ -65,7 +65,8 @@ export function JobStatusActions({
   const [holdOpen, setHoldOpen] = useState(false);
   const [reason, setReason] = useState("");
   const action = useAction(updateJobStatus, {
-    successMessage: (d) => `Job ${JOB_STATUS_LABELS[d.status].toLowerCase()}`,
+    successMessage: (d) =>
+      `Job ${JOB_STATUS_LABELS[d.status].toLowerCase()}${d.sms ? `. ${d.sms}` : ""}`,
     onSuccess: (d) => {
       setHoldOpen(false);
       setReason("");

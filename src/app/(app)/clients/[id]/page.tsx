@@ -7,6 +7,7 @@ import {
   KeyRound,
   Mail,
   MapPin,
+  MessageSquare,
   Phone,
   Plus,
   Receipt,
@@ -24,6 +25,8 @@ import { formatCents } from "@/lib/money";
 import { formatDate } from "@/lib/dates";
 import { formatAddress } from "@/lib/utils";
 import { getClient } from "@/server/clients/queries";
+import { getSmsComposeContext } from "@/server/sms/queries";
+import { SendSmsForm } from "@/components/sms/send-sms-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -87,6 +90,7 @@ export default async function ClientPage({
   const client = await getClient(id);
   if (!client) notFound();
   const canEdit = can(user, "update", "clients");
+  const smsContext = can(user, "create", "sms") ? await getSmsComposeContext(client.id) : null;
   const defaultTab = TABS.includes(tab as (typeof TABS)[number]) ? tab : "overview";
   const equipment = client.properties.flatMap((p) =>
     p.equipment.map((e) => ({ ...e, property: p })),
@@ -108,6 +112,7 @@ export default async function ClientPage({
           <>
             <Badge variant="outline">{CLIENT_TYPE_LABELS[client.type]}</Badge>
             {client.doNotService && <Badge variant="destructive">Do not service</Badge>}
+            {client.noSms && <Badge variant="warning">No SMS</Badge>}
             {client.tags
               .filter((t) => t !== "Do not service")
               .map((t) => (
@@ -143,6 +148,11 @@ export default async function ClientPage({
                   <Receipt /> Invoice
                 </Link>
               </Button>
+            )}
+            {smsContext && (
+              <FormDialogButton label="SMS" title={`Text ${client.name}`} icon={<MessageSquare />}>
+                <SendSmsForm context={smsContext} />
+              </FormDialogButton>
             )}
             <ClientActions
               client={client}

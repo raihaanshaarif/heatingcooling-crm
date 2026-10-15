@@ -12,6 +12,8 @@ import ServiceDueReminderEmail from "@/emails/service-due-reminder";
 import { logActivity, notifyRoles, notifyUsers } from "@/server/audit";
 import { getSettings } from "@/server/settings";
 import { bankDetailsLines, recalcInvoice } from "@/server/invoices/service";
+import { renderSms, resolveSmsSettings } from "@/lib/sms/templates";
+import { baseSmsVars, jobSmsVars, sendClientSms } from "@/server/sms/service";
 
 /**
  * Claim a reminder slot. The unique `key` makes each reminder fire at most once even
@@ -34,12 +36,31 @@ async function claim(
   }
 }
 
-async function finish(key: string, ok: boolean) {
+async function finish(key: string, ok: boolean | "CANCELLED") {
   await db.reminder.update({
     where: { key },
-    data: { status: ok ? "SENT" : "FAILED", sentAt: ok ? new Date() : null },
+    data:
+      ok === "CANCELLED"
+        ? { status: "CANCELLED" }
+        : { status: ok ? "SENT" : "FAILED", sentAt: ok ? new Date() : null },
   });
 }
+
+/** Map an SMS outcome onto the reminder row: skipped texts (opted out, landline) are cancelled. */
+function smsReminderStatus(status: "SENT" | "LOGGED" | "SKIPPED" | "FAILED") {
+  return status === "SKIPPED" ? ("CANCELLED" as const) : status !== "FAILED";
+}
+
+const smsClientSelect = {
+  id: true,
+  type: true,
+  name: true,
+  contacts: {
+    select: { name: true },
+    orderBy: [{ isPrimary: "desc" as const }, { createdAt: "asc" as const }],
+    take: 1,
+  },
+};
 
 export interface CronSummary {
   invoicesUpdated: number;
@@ -48,6 +69,9 @@ export interface CronSummary {
   licenceAlerts: number;
   warrantyAlerts: number;
   quotesExpired: number;
+  appointmentTexts: number;
+  serviceDueTexts: number;
+  overdueTexts: number;
   errors: string[];
 }
 
@@ -60,10 +84,14 @@ export async function runDailyReminders(now = new Date()): Promise<CronSummary> 
     licenceAlerts: 0,
     warrantyAlerts: 0,
     quotesExpired: 0,
+    appointmentTexts: 0,
+    serviceDueTexts: 0,
+    overdueTexts: 0,
     errors: [],
   };
   const settings = await getSettings();
   const templates = resolveTemplates(settings.emailTemplates);
+  const sms = resolveSmsSettings(settings.smsSettings);
   const today = startOfMelbourneDay(now);
 
   // 1. Invoice statuses + overdue reminders at 1, 7 and 14 days (each once).
@@ -73,7 +101,7 @@ export async function runDailyReminders(now = new Date()): Promise<CronSummary> 
       status: { in: ["SENT", "PARTIALLY_PAID", "OVERDUE"] },
       balanceCents: { gt: 0 },
     },
-    include: { client: true },
+    include: { client: { include: { contacts: smsClientSelect.contacts } } },
   });
   for (const invoice of open) {
     try {
@@ -97,10 +125,13 @@ export async function runDailyReminders(now = new Date()): Promise<CronSummary> 
         });
         summary.invoicesUpdated += 1;
       }
+      if (status === "OVERDUE" && sms.enabled.invoiceOverdue && !invoice.client.noSms) {
+        summary.overdueTexts += await overdueInvoiceSms(invoice, now, settings);
+      }
       if (status !== "OVERDUE" || !invoice.client.email) continue;
       const overdue = daysOverdue(invoice.dueDate, now);
       const sent = await db.reminder.findMany({
-        where: { entityId: invoice.id, type: "INVOICE_OVERDUE" },
+        where: { entityId: invoice.id, type: "INVOICE_OVERDUE", channel: "EMAIL" },
         select: { key: true },
       });
       const sentStages = sent.map((r) => Number(r.key.split(":").pop()));
@@ -173,7 +204,10 @@ export async function runDailyReminders(now = new Date()): Promise<CronSummary> 
       nextDueDate: { gte: today, lte: addMelbourneDays(today, 14) },
       client: { deletedAt: null, doNotService: false },
     },
-    include: { client: true, property: true },
+    include: {
+      client: { include: { contacts: smsClientSelect.contacts } },
+      property: true,
+    },
   });
   for (const plan of plans) {
     const key = `SERVICE_DUE:${plan.id}:${toDateInput(plan.nextDueDate)}`;
@@ -220,6 +254,78 @@ export async function runDailyReminders(now = new Date()): Promise<CronSummary> 
       summary.errors.push(
         `Plan ${plan.id}: ${error instanceof Error ? error.message : String(error)}`,
       );
+    }
+  }
+
+  // 2b. Service-due texts, same 14-day window, de-duplicated separately from the email.
+  if (sms.enabled.serviceDue) {
+    for (const plan of plans) {
+      if (plan.client.noSms) continue;
+      const key = `SERVICE_DUE:${plan.id}:${toDateInput(plan.nextDueDate)}:SMS`;
+      if (!(await claim(key, "SERVICE_DUE", "MAINTENANCE_PLAN", plan.id, "SMS"))) continue;
+      try {
+        const result = await sendClientSms({
+          kind: "SERVICE_DUE",
+          clientId: plan.clientId,
+          maintenancePlanId: plan.id,
+          body: renderSms(sms.templates.serviceDue, {
+            ...baseSmsVars(plan.client, settings),
+            planName: plan.name,
+            dueDate: formatDate(plan.nextDueDate),
+          }),
+        });
+        await finish(key, smsReminderStatus(result.status));
+        if (result.status === "FAILED")
+          summary.errors.push(`Plan ${plan.id} SMS: ${result.reason}`);
+        else if (result.status !== "SKIPPED") summary.serviceDueTexts += 1;
+      } catch (error) {
+        await finish(key, false);
+        summary.errors.push(
+          `Plan ${plan.id} SMS: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+  }
+
+  // 2c. Appointment reminders by SMS for jobs scheduled tomorrow (Melbourne), once per job and date.
+  if (sms.enabled.appointmentReminder) {
+    const tomorrow = addMelbourneDays(today, 1);
+    const jobs = await db.job.findMany({
+      where: {
+        deletedAt: null,
+        status: "SCHEDULED",
+        scheduledStart: { gte: tomorrow, lt: addMelbourneDays(today, 2) },
+        client: { deletedAt: null, noSms: false, doNotService: false },
+      },
+      include: {
+        client: { select: smsClientSelect },
+        property: { select: { addressLine1: true, suburb: true } },
+        assignments: { include: { user: { select: { name: true } } } },
+      },
+      orderBy: { scheduledStart: "asc" },
+    });
+    for (const job of jobs) {
+      const key = `APPOINTMENT_REMINDER:${job.id}:${toDateInput(job.scheduledStart)}`;
+      if (!(await claim(key, "APPOINTMENT_REMINDER", "JOB", job.id, "SMS"))) continue;
+      try {
+        const result = await sendClientSms({
+          kind: "APPOINTMENT_REMINDER",
+          clientId: job.clientId,
+          jobId: job.id,
+          body: renderSms(sms.templates.appointmentReminder, {
+            ...baseSmsVars(job.client, settings),
+            ...jobSmsVars(job),
+          }),
+        });
+        await finish(key, smsReminderStatus(result.status));
+        if (result.status === "FAILED") summary.errors.push(`${job.number} SMS: ${result.reason}`);
+        else if (result.status !== "SKIPPED") summary.appointmentTexts += 1;
+      } catch (error) {
+        await finish(key, false);
+        summary.errors.push(
+          `${job.number} SMS: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
     }
   }
 
@@ -281,4 +387,55 @@ export async function runDailyReminders(now = new Date()): Promise<CronSummary> 
   }
 
   return summary;
+}
+
+/** Overdue-invoice text at 1, 7 and 14 days (the same stages as the email), each at most once. */
+async function overdueInvoiceSms(
+  invoice: {
+    id: string;
+    number: string;
+    clientId: string;
+    dueDate: Date;
+    balanceCents: number;
+    publicToken: string;
+    client: { type: string; name: string; contacts: { name: string }[] };
+  },
+  now: Date,
+  settings: Awaited<ReturnType<typeof getSettings>>,
+): Promise<number> {
+  const sms = resolveSmsSettings(settings.smsSettings);
+  const overdue = daysOverdue(invoice.dueDate, now);
+  const sent = await db.reminder.findMany({
+    where: { entityId: invoice.id, type: "INVOICE_OVERDUE", channel: "SMS" },
+    select: { key: true },
+  });
+  const due = dueOverdueReminderStages(
+    overdue,
+    sent.map((r) => Number(r.key.split(":").pop())),
+  );
+  if (due.length === 0) return 0;
+  const stage = due[due.length - 1];
+  // Missed stages (cron didn't run) are claimed as cancelled so only one text goes out.
+  for (const skipped of due.slice(0, -1)) {
+    const k = `INVOICE_OVERDUE:${invoice.id}:SMS:${skipped}`;
+    if (await claim(k, "INVOICE_OVERDUE", "INVOICE", invoice.id, "SMS"))
+      await finish(k, "CANCELLED");
+  }
+  const key = `INVOICE_OVERDUE:${invoice.id}:SMS:${stage}`;
+  if (!(await claim(key, "INVOICE_OVERDUE", "INVOICE", invoice.id, "SMS"))) return 0;
+  const result = await sendClientSms({
+    kind: "INVOICE_OVERDUE",
+    clientId: invoice.clientId,
+    invoiceId: invoice.id,
+    body: renderSms(sms.templates.invoiceOverdue, {
+      ...baseSmsVars(invoice.client, settings),
+      invoiceNumber: invoice.number,
+      balance: formatCents(invoice.balanceCents),
+      dueDate: formatDate(invoice.dueDate),
+      daysOverdue: overdue,
+      link: appUrl(`/i/${invoice.publicToken}`),
+    }),
+  });
+  await finish(key, smsReminderStatus(result.status));
+  return result.status === "SENT" || result.status === "LOGGED" ? 1 : 0;
 }

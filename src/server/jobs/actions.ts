@@ -30,6 +30,7 @@ import {
   timeEntrySchema,
 } from "@/lib/validations/jobs";
 import type { SessionUser } from "@/lib/auth/session";
+import { describeSmsResult, sendOnMyWaySms } from "@/server/sms/service";
 import { getCurrentUser } from "@/lib/auth/session";
 import {
   NotFoundError,
@@ -215,9 +216,9 @@ export async function updateJobStatus(input: z.input<typeof jobStatusSchema>) {
     async ({ id, status, onHoldReason }, user) => {
       if (user.role === "TECHNICIAN" && !TECH_STATUSES.includes(status))
         throw new ForbiddenError("Ask the office to change this status.");
-      await db.$transaction(async (tx) => {
+      const changed = await db.$transaction(async (tx) => {
         const job = await loadJobFor(user, id, tx);
-        if (job.status === status) return;
+        if (job.status === status) return false;
         if (job.status === "INVOICED" && user.role === "TECHNICIAN")
           throw new ForbiddenError("This job is already invoiced.");
         const now = new Date();
@@ -267,9 +268,20 @@ export async function updateJobStatus(input: z.input<typeof jobStatusSchema>) {
           entityId: id,
           changes: { status: { from: job.status, to: status } },
         });
+        return true;
       });
+      // Text the client after the status change is saved; a failed text never blocks the job.
+      let sms: string | undefined;
+      if (changed && status === "EN_ROUTE") {
+        try {
+          sms = describeSmsResult(await sendOnMyWaySms(id, user));
+        } catch (error) {
+          console.error("[sms] on my way failed", error);
+          sms = "Text failed to send";
+        }
+      }
       revalidateJob(id);
-      return { id, status };
+      return { id, status, sms };
     },
   );
 }

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { MapPin, Phone } from "lucide-react";
+import { MapPin, MessageSquare, Phone } from "lucide-react";
 import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/permissions";
 import { formatCents } from "@/lib/money";
@@ -12,6 +12,8 @@ import { getClientOptions } from "@/server/clients/queries";
 import { getJob, getTechnicianOptions } from "@/server/jobs/queries";
 import { getPriceBookPicker } from "@/server/price-book/queries";
 import { getSettings } from "@/server/settings";
+import { getSmsComposeContext } from "@/server/sms/queries";
+import { SendSmsForm } from "@/components/sms/send-sms-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/shared/page-header";
@@ -49,6 +51,9 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
     getPriceBookPicker({ includeCosts: showCosts }),
   ]);
   const showPrices = can(user, "view", "prices");
+  const smsContext = can(user, "create", "sms")
+    ? await getSmsComposeContext(job.clientId, job.id)
+    : null;
   const isGas =
     job.serviceCategory === "GAS_HEATING" ||
     job.equipment.some((e) => ["DUCTED_GAS_HEATER", "WALL_FURNACE"].includes(e.equipment.type));
@@ -81,6 +86,15 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
               status={job.status}
               isTechnician={user.role === "TECHNICIAN"}
             />
+            {smsContext && (
+              <FormDialogButton
+                label="SMS"
+                title={`Text ${job.client.name}`}
+                icon={<MessageSquare />}
+              >
+                <SendSmsForm context={smsContext} />
+              </FormDialogButton>
+            )}
             <JobHeaderActions
               job={job}
               clients={clients}

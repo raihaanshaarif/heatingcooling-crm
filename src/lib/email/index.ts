@@ -51,13 +51,4 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   }
 }
 
-/** Replace {{placeholders}} in admin-editable email templates. */
-export function renderTemplate(
-  template: string,
-  vars: Record<string, string | number | null | undefined>,
-): string {
-  return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_m, key: string) => {
-    const v = vars[key];
-    return v === null || v === undefined ? "" : String(v);
-  });
-}
+export { renderTemplate } from "@/lib/template";

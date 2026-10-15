@@ -34,6 +34,7 @@ export const clientSchema = z
       .nullish()
       .transform((v) => v ?? null),
     doNotService: z.boolean().default(false),
+    noSms: z.boolean().default(false),
     /** On create: also add the billing address as the first service property. */
     createPropertyFromBilling: z.boolean().default(false),
   })

@@ -100,3 +100,50 @@ export const checklistTemplateSchema = z.object({
   active: z.boolean().default(true),
 });
 export type ChecklistTemplateInput = z.input<typeof checklistTemplateSchema>;
+
+/** SMS templates. The first four are sent automatically (each can be switched off); the rest are for one-off texts. */
+export const SMS_AUTO_KEYS = [
+  "onMyWay",
+  "appointmentReminder",
+  "serviceDue",
+  "invoiceOverdue",
+] as const;
+export type SmsAutoKey = (typeof SMS_AUTO_KEYS)[number];
+export const SMS_TEMPLATE_KEYS = [...SMS_AUTO_KEYS, "runningLate", "general"] as const;
+export type SmsTemplateKey = (typeof SMS_TEMPLATE_KEYS)[number];
+
+export const SMS_MAX_LENGTH = 612; // 4 segments of GSM-7: long enough, short enough to stop accidents
+
+const smsBody = z
+  .string()
+  .trim()
+  .min(1, "Template can't be empty")
+  .max(SMS_MAX_LENGTH, `Keep it under ${SMS_MAX_LENGTH} characters`);
+
+export const smsSettingsSchema = z.object({
+  enabled: z.object(
+    Object.fromEntries(SMS_AUTO_KEYS.map((k) => [k, z.boolean()])) as Record<
+      SmsAutoKey,
+      z.ZodBoolean
+    >,
+  ),
+  templates: z.object(
+    Object.fromEntries(SMS_TEMPLATE_KEYS.map((k) => [k, smsBody])) as Record<
+      SmsTemplateKey,
+      typeof smsBody
+    >,
+  ),
+});
+export type SmsSettingsInput = z.input<typeof smsSettingsSchema>;
+export type SmsSettings = z.output<typeof smsSettingsSchema>;
+
+export const sendSmsSchema = z.object({
+  clientId: z.string().min(1),
+  jobId: z.string().min(1).nullish(),
+  body: z
+    .string()
+    .trim()
+    .min(1, "Write a message")
+    .max(SMS_MAX_LENGTH, `Keep it under ${SMS_MAX_LENGTH} characters`),
+});
+export type SendSmsInput = z.input<typeof sendSmsSchema>;

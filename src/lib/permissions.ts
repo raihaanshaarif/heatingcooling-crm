@@ -25,6 +25,7 @@ export type Resource =
   | "settings"
   | "auditLog"
   | "notifications"
+  | "sms"
   | "prices";
 
 export interface PermissionUser {
@@ -67,6 +68,7 @@ export const PERMISSIONS: Matrix = {
     settings: ALL,
     auditLog: ALL,
     notifications: ALL,
+    sms: ALL,
     prices: ALL,
   },
   OFFICE: {
@@ -87,6 +89,7 @@ export const PERMISSIONS: Matrix = {
     reports: READ,
     team: READ,
     notifications: ALL,
+    sms: ["view", "create"], // send one-off texts and see them on timelines; SMS settings/log are admin
     prices: READ,
   },
   TECHNICIAN: {
