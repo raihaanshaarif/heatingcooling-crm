@@ -24,7 +24,7 @@ export async function listPayments(range: { from?: Date | null; to?: Date | null
     method: p.method,
     reference: p.reference,
     paidAt: p.paidAt,
-    recordedBy: p.recordedBy?.name ?? (p.stripePaymentIntentId ? "Stripe" : null),
+    recordedBy: p.recordedBy?.name ?? null,
   }));
 }
 export type PaymentRow = Awaited<ReturnType<typeof listPayments>>[number];

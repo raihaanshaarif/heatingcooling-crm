@@ -804,9 +804,9 @@ pnpm dev                    # starts the app</code></pre>
 <h4>Do I need Docker?</h4>
 <p>No. Coolify builds and runs the container for you. There are no Docker files in the code on purpose.</p>
 <h4>Can clients log in?</h4>
-<p>Not with an account. They get private links to their quotes and invoices, where they can view, download, and accept or decline quotes.</p>
+<p>No. Clients never log in and there is no client portal. They only get a private link in each quote or invoice email to view and download that one document, and to accept or decline a quote.</p>
 <h4>Can clients pay by card online?</h4>
-<p>Not yet (see <a href="#later">section 36</a>). Record card payments taken on your EFTPOS terminal as "Card (EFTPOS)".</p>
+<p>No. CoolOps has no online payments on purpose. Take payment in person or by bank transfer, then record it on the invoice with the method used: Card (EFTPOS), Bank transfer, Cash, Cheque or Other.</p>
 <h4>Can I continue my old invoice numbers?</h4>
 <p>Yes: Settings → Numbering → set the next invoice number.</p>
 <h4>I'm not registered for GST.</h4>
@@ -849,11 +849,9 @@ pnpm dev                    # starts the app</code></pre>
 <h2>36. Not built yet</h2>
 <p>The database is ready for these, and the <span class="ui">Integrations</span> page lists them, but they do not work yet:</p>
 <ul>
-  <li><strong>Stripe card payments</strong>: a "Pay now" button on invoices with automatic payment recording.</li>
   <li><strong>SMS</strong> (Twilio or MessageMedia): "on my way" and reminder texts.</li>
   <li><strong>Xero / MYOB live sync</strong> (the Xero CSV export does work).</li>
   <li><strong>Inventory and van stock</strong>.</li>
-  <li><strong>Client portal</strong> with client logins.</li>
   <li><strong>Google Calendar sync</strong> for technicians.</li>
 </ul>
 <a class="top" href="#top">Back to top ↑</a>

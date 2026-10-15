@@ -116,7 +116,7 @@ prisma/              schema (all phases), migrations, seed
 src/app/(auth)       login
 src/app/(app)        the staff app (dashboard, leads, clients, quotes, jobs, schedule, my-jobs, invoices, payments, maintenance, reports, team, settings, audit log)
 src/app/(public)     client-facing quote (/q/[token]) and invoice (/i/[token]) pages
-src/app/api          auth, lead webhook, PDFs, report CSVs, Xero export, cron, Stripe webhook (Phase 2), file serving
+src/app/api          auth, lead webhook, PDFs, report CSVs, Xero export, cron, file serving
 src/server/<module>  queries.ts (reads) and actions.ts (server actions: Zod validation, permission check, transaction, audit log, activity)
 src/lib              money, dates (Melbourne), numbering, permissions, invoice status, storage, email, PDF, validations (shared Zod schemas)
 src/components       UI (shadcn), data tables, forms, feature components
@@ -129,9 +129,7 @@ Permissions are enforced in four places: middleware (routes), `src/lib/permissio
 
 The database schema already covers these; code entry points are marked `TODO(Phase 2)` / `TODO(Phase 3)` and listed on the in-app _Integrations_ page.
 
-- **Stripe card payments**: "Pay now" on invoices and automatic payment recording. `src/lib/payments/stripe.ts`, `/api/stripe/webhook`.
 - **SMS** (Twilio or MessageMedia): on-my-way and reminder texts. `src/lib/sms`.
 - **Xero / MYOB sync**: a Xero import CSV works today (`/api/export/xero`); live API sync is Phase 3. `src/lib/integrations/accounting.ts`.
 - **Inventory & van stock**: `Supplier` and `InventoryItem` tables exist.
-- **Client portal**: clients currently use secure one-off links.
 - **Google Calendar sync** for technicians. `src/lib/integrations/google-calendar.ts`.

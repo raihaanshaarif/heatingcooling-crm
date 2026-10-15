@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { CreditCard, Download } from "lucide-react";
+import { Download } from "lucide-react";
 import { formatCents } from "@/lib/money";
 import { formatDate } from "@/lib/dates";
 import { formatAddress } from "@/lib/utils";
@@ -113,18 +113,9 @@ export default async function PublicInvoicePage({
                 <p>Reference: {invoice.number}</p>
               </div>
             )}
-            {/* TODO(Phase 2): Stripe "Pay now" button using invoice.stripePaymentLinkUrl (see src/lib/payments/stripe.ts). */}
-            {invoice.stripePaymentLinkUrl ? (
-              <Button asChild size="lg">
-                <a href={invoice.stripePaymentLinkUrl}>
-                  <CreditCard /> Pay now by card
-                </a>
-              </Button>
-            ) : (
-              <p className="text-muted-foreground">
-                Card payments online are coming soon. Call us to pay by card over the phone.
-              </p>
-            )}
+            <p className="text-muted-foreground">
+              To pay by card or cash, please call us or pay the technician on site.
+            </p>
           </CardContent>
         </Card>
       )}

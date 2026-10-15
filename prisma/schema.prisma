@@ -119,7 +119,6 @@ enum InvoiceStatus {
 
 enum PaymentMethod {
   CARD
-  STRIPE
   BANK_TRANSFER
   CASH
   CHEQUE
@@ -766,7 +765,6 @@ model Invoice {
   paidAt               DateTime?
   voidedAt             DateTime?
   publicToken          String        @unique @default(cuid())
-  stripePaymentLinkUrl String?
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
   deletedAt            DateTime?
@@ -812,7 +810,6 @@ model Payment {
   reference             String?
   paidAt                DateTime
   notes                 String?
-  stripePaymentIntentId String?       @unique
   recordedById          String?
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt

@@ -188,9 +188,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
                       </div>
                       <div className="flex items-center gap-1">
                         <span className="tabular-nums">{formatCents(p.amountCents)}</span>
-                        {can(user, "delete", "payments") && !p.stripePaymentIntentId && (
-                          <DeletePaymentButton id={p.id} />
-                        )}
+                        {can(user, "delete", "payments") && <DeletePaymentButton id={p.id} />}
                       </div>
                     </li>
                   ))}

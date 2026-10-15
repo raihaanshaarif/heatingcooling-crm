@@ -82,8 +82,6 @@ export async function deletePayment(input: { id: string }) {
     async ({ id }, user) => {
       const payment = await db.payment.findUnique({ where: { id } });
       if (!payment) throw new NotFoundError("Payment");
-      if (payment.stripePaymentIntentId)
-        throw new UserError("Card payments from Stripe must be refunded in Stripe.");
       await db.$transaction(async (tx) => {
         await tx.payment.delete({ where: { id } });
         await recalcInvoice(tx, payment.invoiceId);

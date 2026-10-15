@@ -1,16 +1,6 @@
 import type { Metadata } from "next";
-import {
-  CalendarDays,
-  CreditCard,
-  Download,
-  Globe,
-  Mail,
-  MessageSquare,
-  Package,
-  UserRound,
-} from "lucide-react";
+import { CalendarDays, Download, Globe, Mail, MessageSquare, Package } from "lucide-react";
 import { requirePermission } from "@/lib/auth/session";
-import { isStripeConfigured } from "@/lib/payments/stripe";
 import { isGoogleCalendarConfigured } from "@/lib/integrations/google-calendar";
 import { appUrl } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -68,12 +58,6 @@ export default async function IntegrationsPage() {
       ),
     },
     {
-      icon: CreditCard,
-      title: "Stripe card payments",
-      status: <Status ready={isStripeConfigured()} phase="Phase 2" />,
-      body: "“Pay now” on invoices with automatic payment recording via webhook. Code entry points: src/lib/payments/stripe.ts and /api/stripe/webhook.",
-    },
-    {
       icon: MessageSquare,
       title: "SMS (Twilio / MessageMedia)",
       status: <Status ready={false} phase="Phase 2" />,
@@ -90,12 +74,6 @@ export default async function IntegrationsPage() {
       title: "Inventory & van stock",
       status: <Status ready={false} phase="Phase 3" />,
       body: "Suppliers, stock levels per van and warehouse, auto-deduct parts used on jobs. Database tables (Supplier, InventoryItem) already exist.",
-    },
-    {
-      icon: UserRound,
-      title: "Client portal",
-      status: <Status ready={false} phase="Phase 3" />,
-      body: "Clients log in to see their equipment, service history, quotes and invoices. Today they get secure one-off links for quotes and invoices.",
     },
   ];
   return (

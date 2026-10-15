@@ -124,7 +124,6 @@ export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   CARD: "Card (EFTPOS)",
-  STRIPE: "Stripe (online)",
   BANK_TRANSFER: "Bank transfer",
   CASH: "Cash",
   CHEQUE: "Cheque",
