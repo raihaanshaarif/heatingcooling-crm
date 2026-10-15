@@ -1,6 +1,8 @@
 # Coolify builds this app with Nixpacks (no Dockerfile needed).
+# `pnpm start` applies database migrations before starting, so it also works
+# if a custom Start Command of `pnpm start` is set in Coolify.
 [phases.setup]
 nixPkgs = ["nodejs_22", "pnpm", "openssl"]
 
 [start]
-cmd = "pnpm prisma migrate deploy && pnpm start"
+cmd = "pnpm start" # runs prisma migrate deploy, then next start

@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
-    "start": "next start",
+    "start": "prisma migrate deploy && next start",
     "lint": "eslint . --max-warnings=0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -20,7 +20,7 @@
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
-    "db:seed": "prisma db seed",
+    "db:seed": "prisma migrate deploy && prisma db seed",
     "db:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio",
     "cron:reminders": "node scripts/cron-reminders.mjs"

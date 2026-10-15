@@ -193,7 +193,7 @@ Without `RESEND_API_KEY`, emails are printed to the server log instead of sent, 
 
 ## Deploy on Coolify
 
-Coolify builds and runs the container itself with Nixpacks, so the repo has no Dockerfile or docker-compose. `nixpacks.toml` pins Node 22 and makes the app run `prisma migrate deploy` on every start, so the database schema is always up to date.
+Coolify builds and runs the container itself with Nixpacks, so the repo has no Dockerfile or docker-compose. `nixpacks.toml` pins Node 22. `pnpm start` runs `prisma migrate deploy` before starting, and `pnpm db:seed` does too, so the database tables are always created and up to date.
 
 1. **Database.** In your Coolify project, add a new resource: _PostgreSQL 16_. Start it and copy its internal connection URL (it looks like `postgres://postgres:...@<id>:5432/postgres`).
 2. **App.** Add a new resource from your Git repo, build pack **Nixpacks**, port **3000**. Coolify reads the build and start commands from `package.json` and `nixpacks.toml`, so leave them empty.
