@@ -13,7 +13,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { addMelbourneDays, formatDateTime } from "@/lib/dates";
 import { getSmsConfig, SMS_PROVIDER_LABELS } from "@/lib/sms";
-import { isGoogleCalendarConfigured } from "@/lib/integrations/google-calendar";
+import { ROLE_LABELS } from "@/lib/labels";
 import { appUrl } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,12 +27,14 @@ import {
   XeroLinks,
 } from "@/components/xero/xero-connection-actions";
 import { getXeroOverview } from "@/server/xero/queries";
+import { getCalendarOverview } from "@/server/google-calendar/queries";
+import { RetryFailedCalendarButton } from "@/components/google-calendar/calendar-actions";
+import { CalendarBadge } from "@/components/google-calendar/calendar-badge";
 
 export const metadata: Metadata = { title: "Integrations" };
 
-function Status({ ready, phase }: { ready: boolean; phase?: string }) {
+function Status({ ready }: { ready: boolean }) {
   if (ready) return <Badge variant="success">Connected</Badge>;
-  if (phase) return <Badge variant="muted">{phase}</Badge>;
   return <Badge variant="warning">Not configured</Badge>;
 }
 
@@ -51,6 +53,7 @@ export default async function IntegrationsPage({
   await requirePermission("view", "settings");
   const { xero: xeroParam, reason } = await searchParams;
   const xero = await getXeroOverview();
+  const calendar = await getCalendarOverview();
   const xeroBanner =
     xeroParam === "error"
       ? { error: true, text: `Couldn't connect Xero: ${reason ?? "unknown error"}` }
@@ -226,8 +229,74 @@ export default async function IntegrationsPage({
     {
       icon: CalendarDays,
       title: "Google Calendar",
-      status: <Status ready={isGoogleCalendarConfigured()} phase="Phase 3" />,
-      body: "Push each technician's jobs into their own Google Calendar. Stub in src/lib/integrations/google-calendar.ts.",
+      status: !calendar.configured ? (
+        <Badge variant="warning">Not set up</Badge>
+      ) : calendar.users.length ? (
+        <Badge variant="success">{calendar.users.length} connected</Badge>
+      ) : (
+        <Badge variant="muted">Set up</Badge>
+      ),
+      body: (
+        <span data-testid="calendar-card">
+          Each person&apos;s scheduled jobs go into their own Google Calendar, one way (CoolOps →
+          Google), and move, update or disappear when a job is rescheduled, reassigned, cancelled or
+          deleted. No prices are sent.{" "}
+          {!calendar.configured ? (
+            <>
+              To set up: in <strong>console.cloud.google.com</strong> create a project, enable the{" "}
+              <em>Google Calendar API</em>, set up the <em>OAuth consent screen</em> (External,
+              scopes <code className="bg-muted rounded px-1">calendar.events</code>, openid, email)
+              and create an <em>OAuth client ID</em> of type <em>Web application</em> with redirect
+              URI{" "}
+              <code className="bg-muted rounded px-1">
+                {appUrl("/api/integrations/google/callback")}
+              </code>
+              . Copy the Client ID and secret into{" "}
+              <code className="bg-muted rounded px-1">GOOGLE_CLIENT_ID</code> and{" "}
+              <code className="bg-muted rounded px-1">GOOGLE_CLIENT_SECRET</code> and redeploy. Then
+              everyone connects their own calendar from <strong>My account</strong>.
+            </>
+          ) : (
+            <>
+              Everyone connects their own Google account from{" "}
+              <Link href="/account" className="underline">
+                My account
+              </Link>{" "}
+              → Connect Google Calendar. {calendar.users.length} of {calendar.totalUsers} active
+              users connected.
+              {calendar.users.length > 0 && (
+                <span className="mt-2 block space-y-1" data-testid="calendar-users">
+                  {calendar.users.map((u) => (
+                    <span key={u.userId} className="block">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="text-foreground font-medium">{u.name}</span>
+                        <span>
+                          {ROLE_LABELS[u.role]} · {u.googleEmail ?? "Google account"}
+                        </span>
+                        <CalendarBadge state={u.state} />
+                      </span>
+                      <span className="block text-xs">
+                        {u.upcoming} upcoming event{u.upcoming === 1 ? "" : "s"}
+                        {u.pending > 0 && `, ${u.pending} waiting`}
+                        {u.failed > 0 && `, ${u.failed} failed`}
+                        {u.lastSyncAt ? ` · last update ${formatDateTime(u.lastSyncAt)}` : ""}
+                      </span>
+                      {u.lastError && (
+                        <span className="text-destructive block text-xs">{u.lastError}</span>
+                      )}
+                    </span>
+                  ))}
+                </span>
+              )}
+              {calendar.failed > 0 && (
+                <span className="mt-2 flex gap-2">
+                  <RetryFailedCalendarButton />
+                </span>
+              )}
+            </>
+          )}
+        </span>
+      ),
     },
     {
       icon: Package,
@@ -259,10 +328,7 @@ export default async function IntegrationsPage({
   ];
   return (
     <>
-      <PageHeader
-        title="Integrations"
-        description="Connections to other services. Phase 3 items are planned and stubbed in the code."
-      />
+      <PageHeader title="Integrations" description="Connections to other services." />
       {xeroBanner && (
         <p
           role="status"

@@ -267,6 +267,19 @@ enum XeroJobStatus {
   CANCELLED
 }
 
+enum GoogleCalendarTaskKind {
+  SYNC_JOB // bring one job's event in one user's calendar up to date (create / update / delete)
+  RESYNC_USER // full resync of a user's upcoming jobs
+}
+
+enum GoogleCalendarTaskStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+  CANCELLED
+}
+
 enum PaymentTerms {
   ON_COMPLETION
   DAYS_7
@@ -294,7 +307,7 @@ model User {
   accounts         Account[]
   sessions         Session[]
   licences         TechnicianLicence[]
-  assignedLeads    Lead[]              @relation("LeadAssignee")
+  assignedLeads    Lead[]                    @relation("LeadAssignee")
   jobAssignments   JobAssignment[]
   timeEntries      TimeEntry[]
   activities       Activity[]
@@ -305,7 +318,10 @@ model User {
   van              StockLocation?
   stockMovements   StockMovement[]
   stockReceipts    StockReceipt[]
-  smsSent          SmsMessage[]        @relation("SmsSentBy")
+  smsSent          SmsMessage[]              @relation("SmsSentBy")
+  googleCalendar   GoogleCalendarConnection?
+  calendarEvents   GoogleCalendarEvent[]
+  calendarTasks    GoogleCalendarTask[]
 
   @@index([role, active])
 }
@@ -681,10 +697,10 @@ model Job {
   updatedAt               DateTime         @updatedAt
   deletedAt               DateTime?
 
-  client          Client             @relation(fields: [clientId], references: [id])
-  property        Property?          @relation(fields: [propertyId], references: [id], onDelete: SetNull)
-  quote           Quote?             @relation(fields: [quoteId], references: [id], onDelete: SetNull)
-  maintenancePlan MaintenancePlan?   @relation(fields: [maintenancePlanId], references: [id], onDelete: SetNull)
+  client          Client                @relation(fields: [clientId], references: [id])
+  property        Property?             @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  quote           Quote?                @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  maintenancePlan MaintenancePlan?      @relation(fields: [maintenancePlanId], references: [id], onDelete: SetNull)
   assignments     JobAssignment[]
   equipment       JobEquipment[]
   checklistItems  JobChecklistItem[]
@@ -693,6 +709,7 @@ model Job {
   invoices        Invoice[]
   stockMovements  StockMovement[]
   smsMessages     SmsMessage[]
+  calendarEvents  GoogleCalendarEvent[]
 
   @@index([clientId])
   @@index([status])
@@ -1187,6 +1204,78 @@ model XeroSyncJob {
   @@index([status, nextAttemptAt])
   @@index([invoiceId])
   @@index([kind, entityId])
+  @@index([createdAt])
+}
+
+// ─── Google Calendar (one way: CoolOps → each user's own calendar) ───────────
+
+/// One per user who connected their Google account. Tokens are AES-256-GCM encrypted.
+model GoogleCalendarConnection {
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  /// The Google account (from the id_token), shown on My account and the Integrations page.
+  googleEmail       String?
+  calendarId        String    @default("primary")
+  accessTokenEnc    String
+  refreshTokenEnc   String
+  accessTokenExpiry DateTime
+  scopes            String
+  /// Set when Google refused the refresh token: the user has to connect again.
+  needsReconnect    Boolean   @default(false)
+  lastSyncAt        DateTime?
+  lastError         String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// The Google event made for one job assignment (user + job). Kept after the assignment is
+/// removed until the event has been deleted from that user's calendar.
+model GoogleCalendarEvent {
+  id            String    @id @default(cuid())
+  userId        String
+  jobId         String
+  calendarId    String
+  googleEventId String
+  /// Hash of the last event body sent, so unchanged jobs cost no API call.
+  payloadHash   String
+  /// Job start when last synced (the full resync looks at upcoming events).
+  startsAt      DateTime?
+  syncedAt      DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job  Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobId])
+  @@index([jobId])
+  @@index([userId, startsAt])
+}
+
+/// Outbox for calendar changes, written in the same transaction as the job change.
+model GoogleCalendarTask {
+  id            String                   @id @default(cuid())
+  kind          GoogleCalendarTaskKind
+  userId        String
+  jobId         String?
+  /// RESYNC_USER: also re-send events that look unchanged (repairs edits made in Google).
+  force         Boolean                  @default(false)
+  label         String
+  status        GoogleCalendarTaskStatus @default(PENDING)
+  attempts      Int                      @default(0)
+  nextAttemptAt DateTime                 @default(now())
+  lockedAt      DateTime?
+  lastError     String?
+  completedAt   DateTime?
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@index([userId, jobId])
   @@index([createdAt])
 }
 

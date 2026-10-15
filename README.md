@@ -163,7 +163,8 @@ The real Xero API was not called during development (no Xero app or organisation
 3. warns about technician licences (ARC, gas, electrical…) and equipment warranties expiring within 30 days,
 4. expires quotes past their valid-until date,
 5. texts (SMS) clients with a job scheduled tomorrow, clients whose plan is due within 14 days, and, if switched on, overdue invoices (see SMS texts below),
-6. refreshes the Xero connection and, with automatic sync on, sends anything still waiting to Xero (see Xero above).
+6. refreshes the Xero connection and, with automatic sync on, sends anything still waiting to Xero (see Xero above),
+7. checks everyone's connected Google Calendar for the next 60 days and retries waiting calendar updates (see Google Calendar below).
 
 Every reminder is de-duplicated, so running it twice does nothing extra. On Coolify it runs as a scheduled task (see Deploy below); `pnpm cron:reminders` calls the endpoint from inside the app container.
 
@@ -183,6 +184,7 @@ Coolify builds and runs the container itself with Nixpacks, so the repo has no D
    - `LEAD_WEBHOOK_SECRET` and `CRON_SECRET`: long random strings.
    - Optional SMS: `SMS_PROVIDER` plus the provider's keys and `SMS_FROM` (see SMS texts above).
    - Optional Xero: `XERO_CLIENT_ID` and `XERO_CLIENT_SECRET` (see Xero above), then **Integrations → Connect to Xero**.
+   - Optional Google Calendar: `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (see Google Calendar below); each person then connects from **My account**.
    - `TZ=Australia/Melbourne` is optional; the app always uses Melbourne time anyway.
 4. **File uploads** (job photos, signatures, logo). Easiest: keep `STORAGE_DRIVER=local`, set `STORAGE_LOCAL_DIR=/app/uploads`, and in the app's _Storages_ tab add a persistent volume mounted at `/app/uploads` so files survive redeploys. Or use `STORAGE_DRIVER=s3` with Cloudflare R2 / S3.
 5. **Domain.** Set it under the app's _Domains_. Coolify issues the HTTPS certificate.
@@ -196,17 +198,33 @@ prisma/              schema (all phases), migrations, seed
 src/app/(auth)       login
 src/app/(app)        the staff app (dashboard, leads, clients, quotes, jobs, schedule, my-jobs, invoices, payments, maintenance, inventory, suppliers, reports, team, settings, audit log)
 src/app/(public)     client-facing quote (/q/[token]) and invoice (/i/[token]) pages
-src/app/api          auth, lead webhook, PDFs, report CSVs, Xero export + OAuth, cron, file serving
+src/app/api          auth, lead webhook, PDFs, report CSVs, Xero export + OAuth, Google Calendar OAuth, cron, file serving
 src/server/<module>  queries.ts (reads) and actions.ts (server actions: Zod validation, permission check, transaction, audit log, activity)
-src/lib              money, dates (Melbourne), numbering, permissions, invoice status, storage, email, SMS, Xero, PDF, validations (shared Zod schemas)
+src/lib              money, dates (Melbourne), numbering, permissions, invoice status, storage, email, SMS, Xero, Google Calendar, token encryption, outbox retry policy, PDF, validations (shared Zod schemas)
 src/components       UI (shadcn), data tables, forms, feature components
 src/emails           React Email templates
 ```
 
 Permissions are enforced in four places: middleware (routes), `src/lib/permissions.ts` (`can()`), every server action, and the UI.
 
-## Phase 2 / 3 (stubbed, not built yet)
+## Google Calendar sync
 
-The database schema already covers these; code entry points are marked `TODO(Phase 2)` / `TODO(Phase 3)` and listed on the in-app _Integrations_ page.
+One way, **CoolOps → each person's own Google Calendar**. Everyone (technicians, office, admin) connects their own Google account; nothing comes back from Google, so keep scheduling in CoolOps.
 
-- **Google Calendar sync** for technicians. `src/lib/integrations/google-calendar.ts`.
+- **What appears.** Every scheduled job you're assigned to becomes an event in your main Google calendar: title `J-0042 · Split system service · Client name` (a ✓ in front once the job is completed or invoiced, "On hold ·" while on hold), location = the site address, description = the job type, client phone(s), site address, priority (high / emergency), anyone else on the job, access / parking / pet / key notes, the job description and a link that opens the job in CoolOps (`/my-jobs/<id>` for technicians, `/jobs/<id>` for office and admin). Times are Melbourne (daylight saving included). **No prices or costs are ever sent.**
+- **What keeps it in step.** Rescheduling (including drag and drop on the Schedule board), editing, reassigning (the event leaves the old technician's calendar and appears in the new one's), unscheduling, cancelling, completing and deleting a job all update or remove the event, as do changes to the client's phone or the site's address and access notes.
+- **Outbox queue.** Each change writes a `GoogleCalendarTask` row in the same database transaction, which is processed straight after the action responds (Next.js `after()`, non-blocking). Failures retry after 1 min, 5 min, 30 min, 2 h, 6 h, then stop (6 attempts). Rate limits (429, or 403 `userRateLimitExceeded`) wait for Google's `Retry-After` without using up an attempt. An expired access token is refreshed automatically and the call retried; a dead refresh token marks the connection "needs reconnecting" and stops the retries. Events deleted in Google (404 / 410) are recreated.
+- **No duplicates.** Each event id is derived from the user id and the job id, so a create that is retried after a timeout hits Google's 409 instead of making a second event, and the body is hashed so an unchanged job costs no API call.
+- **Resync my calendar** (_My account_) re-sends the next 60 days, which also repairs events someone edited or deleted in Google. The daily cron does the same check for everyone connected.
+- **Where to see it.** _My account_ → Google Calendar (connect, which Google account, how many upcoming jobs, last update, any error, Resync, Reconnect, Disconnect). Admins: the Integrations card lists who has connected, their Google account, counts and errors, with **Retry failed**; the Team page shows a _Calendar connected_ badge per person.
+- **Tokens** (access + refresh) are encrypted at rest with AES-256-GCM using a key derived from `AUTH_SECRET` (HKDF; shared helper `src/lib/crypto.ts`, one key context per integration). **Disconnect** removes the user's upcoming CoolOps events from their calendar (past ones stay), revokes the grant at Google and deletes the tokens.
+- Code: `src/lib/google-calendar` (OAuth URLs and token requests, API client with 401 refresh / rate-limit handling, event payloads and the create/update/delete diff; all unit-tested with a mocked `fetch`), `src/server/google-calendar` (connection, outbox triggers, sync worker, actions, queries), `src/app/api/integrations/google/{connect,callback}`, shared retry policy in `src/lib/outbox.ts`.
+
+| Variable                                                                | What                                                                                                                                                                                                                               |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`                             | From an OAuth client ID (type _Web application_) in Google Cloud console, with the Google Calendar API enabled. Redirect URI: `{APP_URL}/api/integrations/google/callback`. Empty: the card says _Not set up_ and nothing is sent. |
+| `GOOGLE_AUTHORIZE_URL` / `GOOGLE_OAUTH_URL` / `GOOGLE_CALENDAR_API_URL` | Testing only: point the consent, token and API calls at a mock server.                                                                                                                                                             |
+
+Scopes asked for: `openid`, `email` (to show which Google account is connected) and `https://www.googleapis.com/auth/calendar.events` (events only — CoolOps can't read the rest of the calendar). Google is asked for offline access with `prompt=consent`, so a refresh token comes back every time.
+
+The real Google Calendar API was **not** called during development (no Google Cloud project). Event payloads (including Melbourne daylight saving), the create/update/delete diff, the OAuth URLs and the API client are unit-tested; connecting, event creation on scheduling, updates on drag-reschedule, the move on reassignment, deletion on cancel / unschedule, the 401 refresh, a rate limit, recreating an event deleted in Google, Resync and Disconnect were clicked through in the browser against a local mock of Google's endpoints.

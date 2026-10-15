@@ -47,6 +47,7 @@ import {
   returnForJobLine,
   type StockNote,
 } from "@/server/inventory/service";
+import { kickCalendarSync, queueJobCalendarSync } from "@/server/google-calendar/queue";
 import { applyChecklist, loadJobFor } from "./service";
 
 function revalidateJob(id?: string) {
@@ -134,6 +135,7 @@ export async function createJob(input: z.input<typeof jobSchema>) {
           entityId: created.id,
           changes: { number, title: d.title },
         });
+        if (d.scheduledStart && d.assigneeIds.length) await queueJobCalendarSync(tx, created.id);
         if (d.assigneeIds.length) {
           await notifyUsers(
             tx,
@@ -147,6 +149,7 @@ export async function createJob(input: z.input<typeof jobSchema>) {
         }
         return created;
       });
+      kickCalendarSync();
       revalidateJob();
       return { id: job.id };
     },
@@ -182,6 +185,7 @@ export async function updateJob(id: string, input: z.input<typeof jobSchema>) {
         await tx.job.update({ where: { id }, data });
         const { added } = await syncAssignments(tx, id, d.assigneeIds);
         await syncEquipment(tx, id, d.equipmentIds);
+        await queueJobCalendarSync(tx, id);
         await audit(tx, {
           userId: user.id,
           action: "UPDATE",
@@ -201,6 +205,7 @@ export async function updateJob(id: string, input: z.input<typeof jobSchema>) {
           );
         }
       });
+      kickCalendarSync();
       revalidateJob(id);
       return { id };
     },
@@ -233,6 +238,7 @@ export async function updateJobStatus(input: z.input<typeof jobStatusSchema>) {
           if (!job.actualStart) data.actualStart = job.enRouteAt ?? now;
         }
         await tx.job.update({ where: { id }, data });
+        await queueJobCalendarSync(tx, id);
 
         // Technician timer: starting work opens a time entry, finishing/pausing closes it.
         if (status === "IN_PROGRESS" && user.role === "TECHNICIAN") {
@@ -270,6 +276,7 @@ export async function updateJobStatus(input: z.input<typeof jobStatusSchema>) {
         });
         return true;
       });
+      if (changed) kickCalendarSync();
       // Text the client after the status change is saved; a failed text never blocks the job.
       let sms: string | undefined;
       if (changed && status === "EN_ROUTE") {
@@ -343,6 +350,7 @@ export async function assignTechnicians(input: z.input<typeof assignSchema>) {
         const job = await tx.job.findFirst({ where: { id, deletedAt: null } });
         if (!job) throw new NotFoundError("Job");
         const { added } = await syncAssignments(tx, id, assigneeIds);
+        await queueJobCalendarSync(tx, id);
         await audit(tx, {
           userId: user.id,
           action: "ASSIGN",
@@ -360,6 +368,7 @@ export async function assignTechnicians(input: z.input<typeof assignSchema>) {
           },
         );
       });
+      kickCalendarSync();
       revalidateJob(id);
       return { id };
     },
@@ -417,6 +426,7 @@ export async function rescheduleJob(input: z.input<typeof rescheduleSchema>) {
             await tx.jobAssignment.create({ data: { jobId: id, userId: technicianId } });
           }
         }
+        await queueJobCalendarSync(tx, id);
         await logActivity(tx, {
           entityType: "JOB",
           entityId: id,
@@ -435,6 +445,7 @@ export async function rescheduleJob(input: z.input<typeof rescheduleSchema>) {
           },
         });
       });
+      kickCalendarSync();
       revalidateJob(id);
       return { id };
     },
@@ -451,6 +462,7 @@ export async function unscheduleJob(input: { id: string }) {
           where: { id },
           data: { scheduledStart: null, scheduledEnd: null, status: "UNSCHEDULED" },
         });
+        await queueJobCalendarSync(tx, id);
         await logActivity(tx, {
           entityType: "JOB",
           entityId: id,
@@ -466,6 +478,7 @@ export async function unscheduleJob(input: { id: string }) {
           changes: { scheduledStart: null },
         });
       });
+      kickCalendarSync();
       revalidateJob(id);
       return { id };
     },
@@ -484,8 +497,10 @@ export async function deleteJob(input: { id: string }) {
         throw new UserError("This job has invoices. Void them first, or cancel the job instead.");
       await db.$transaction(async (tx) => {
         await tx.job.update({ where: { id }, data: { deletedAt: new Date() } });
+        await queueJobCalendarSync(tx, id);
         await audit(tx, { userId: user.id, action: "DELETE", entityType: "JOB", entityId: id });
       });
+      kickCalendarSync();
       revalidateJob();
       return null;
     },

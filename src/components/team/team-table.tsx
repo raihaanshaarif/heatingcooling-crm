@@ -11,6 +11,7 @@ import { formatCents } from "@/lib/money";
 import { formatMinutes } from "@/lib/dates";
 import { formatPhoneAU } from "@/lib/utils";
 import type { TeamRow } from "@/server/team/queries";
+import { CalendarBadge } from "@/components/google-calendar/calendar-badge";
 
 export function TeamTable({ data, showCosts }: { data: TeamRow[]; showCosts: boolean }) {
   const columns: ColumnDef<TeamRow, unknown>[] = [
@@ -59,6 +60,17 @@ export function TeamTable({ data, showCosts }: { data: TeamRow[]; showCosts: boo
               </div>
             ))}
           </div>
+        ),
+    },
+    {
+      id: "calendar",
+      meta: { label: "Google Calendar" },
+      header: "Calendar",
+      cell: ({ row }) =>
+        row.original.calendar ? (
+          <CalendarBadge state={row.original.calendar} />
+        ) : (
+          <span className="text-muted-foreground text-xs">Not connected</span>
         ),
     },
     {

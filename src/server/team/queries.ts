@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "@/lib/db";
 import { addMelbourneDays, startOfMelbourneMonth } from "@/lib/dates";
+import { calendarState } from "@/server/google-calendar/queries";
 
 export async function listTeam() {
   const monthStart = startOfMelbourneMonth();
@@ -17,6 +18,7 @@ export async function listTeam() {
         },
       },
       timeEntries: { where: { startedAt: { gte: monthStart } }, select: { minutes: true } },
+      googleCalendar: { select: { needsReconnect: true, lastError: true } },
     },
     orderBy: [{ active: "desc" }, { role: "asc" }, { name: "asc" }],
   });
@@ -39,6 +41,7 @@ export async function listTeam() {
       expiresAt: l.expiresAt,
     })),
     licenceAlert: u.licences.some((l) => l.expiresAt && l.expiresAt <= soon),
+    calendar: u.googleCalendar ? calendarState(u.googleCalendar) : null,
   }));
 }
 export type TeamRow = Awaited<ReturnType<typeof listTeam>>[number];

@@ -4,6 +4,10 @@
  * carries Retry-After, and turns Xero's validation errors into readable messages.
  */
 
+import { parseRetryAfter } from "@/lib/outbox";
+
+export { parseRetryAfter };
+
 export class XeroApiError extends Error {
   constructor(
     message: string,
@@ -48,15 +52,6 @@ export interface XeroRequestOptions {
 }
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
-/** Retry-After is seconds (or an HTTP date). Missing → 60s. */
-export function parseRetryAfter(value: string | null, now = Date.now()): number {
-  if (!value) return 60_000;
-  const seconds = Number(value);
-  if (Number.isFinite(seconds)) return Math.max(1, seconds) * 1000;
-  const date = Date.parse(value);
-  return Number.isFinite(date) ? Math.max(1000, date - now) : 60_000;
-}
 
 /** Pull the human messages out of a Xero error body (ValidationException etc.). */
 export function xeroErrorMessage(body: unknown, status: number): string {

@@ -7,6 +7,7 @@ import { clientSchema, contactSchema, propertySchema } from "@/lib/validations/c
 import { NotFoundError, UserError, idSchema, runAction } from "@/server/action";
 import { audit, diff, logActivity } from "@/server/audit";
 import { kickXeroSync, queueContactUpdate } from "@/server/xero/queue";
+import { kickCalendarSync, queueCalendarSyncForJobs } from "@/server/google-calendar/queue";
 
 function clientData(d: z.output<typeof clientSchema>) {
   return {
@@ -89,8 +90,15 @@ export async function updateClient(id: string, input: z.input<typeof clientSchem
           changes: diff(before, data),
         });
         await queueContactUpdate(tx, updated);
+        if (
+          before.name !== updated.name ||
+          before.phone !== updated.phone ||
+          before.altPhone !== updated.altPhone
+        )
+          await queueCalendarSyncForJobs(tx, { clientId: id, deletedAt: null });
       });
       kickXeroSync();
+      kickCalendarSync();
       revalidatePath(`/clients/${id}`);
       revalidatePath("/clients");
       return { id };
@@ -149,6 +157,7 @@ export async function saveContact(input: z.input<typeof contactSchema>) {
         });
         return saved;
       });
+      if (id) kickCalendarSync();
       revalidatePath(`/clients/${d.clientId}`);
       return { id: contact.id };
     },
@@ -194,6 +203,7 @@ export async function saveProperty(id: string | null, input: z.input<typeof prop
           entityId: saved.id,
           changes: id ? diff(before, d) : d,
         });
+        if (id) await queueCalendarSyncForJobs(tx, { propertyId: id, deletedAt: null });
         if (!id) {
           await logActivity(tx, {
             entityType: "CLIENT",
