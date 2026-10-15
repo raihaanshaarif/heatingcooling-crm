@@ -178,6 +178,7 @@ enum EntityType {
   SUPPLIER
   INVENTORY_ITEM
   STOCK_RECEIPT
+  ROUTE_PLAN
 }
 
 enum AttachmentKind {
@@ -290,38 +291,46 @@ enum PaymentTerms {
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
 model User {
-  id              String    @id @default(cuid())
-  name            String
-  email           String    @unique
-  emailVerified   DateTime?
-  image           String?
-  passwordHash    String?
-  role            Role      @default(TECHNICIAN)
-  phone           String?
-  color           String    @default("#2563eb")
-  hourlyCostCents Int       @default(0)
-  active          Boolean   @default(true)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                String         @id @default(cuid())
+  name              String
+  email             String         @unique
+  emailVerified     DateTime?
+  image             String?
+  passwordHash      String?
+  role              Role           @default(TECHNICIAN)
+  phone             String?
+  color             String         @default("#2563eb")
+  hourlyCostCents   Int            @default(0)
+  active            Boolean        @default(true)
+  /// Route planning: start and end the day at home instead of the depot.
+  routeFromHome     Boolean        @default(false)
+  homeAddress       String?
+  homeLat           Float?
+  homeLng           Float?
+  homeGeocodeSource GeocodeSource?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
-  accounts         Account[]
-  sessions         Session[]
-  licences         TechnicianLicence[]
-  assignedLeads    Lead[]                    @relation("LeadAssignee")
-  jobAssignments   JobAssignment[]
-  timeEntries      TimeEntry[]
-  activities       Activity[]
-  attachments      Attachment[]
-  paymentsRecorded Payment[]
-  notifications    Notification[]
-  auditLogs        AuditLog[]
-  van              StockLocation?
-  stockMovements   StockMovement[]
-  stockReceipts    StockReceipt[]
-  smsSent          SmsMessage[]              @relation("SmsSentBy")
-  googleCalendar   GoogleCalendarConnection?
-  calendarEvents   GoogleCalendarEvent[]
-  calendarTasks    GoogleCalendarTask[]
+  accounts          Account[]
+  sessions          Session[]
+  licences          TechnicianLicence[]
+  assignedLeads     Lead[]                    @relation("LeadAssignee")
+  jobAssignments    JobAssignment[]
+  timeEntries       TimeEntry[]
+  activities        Activity[]
+  attachments       Attachment[]
+  paymentsRecorded  Payment[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  van               StockLocation?
+  stockMovements    StockMovement[]
+  stockReceipts     StockReceipt[]
+  smsSent           SmsMessage[]              @relation("SmsSentBy")
+  googleCalendar    GoogleCalendarConnection?
+  calendarEvents    GoogleCalendarEvent[]
+  calendarTasks     GoogleCalendarTask[]
+  routePlans        RoutePlan[]               @relation("RoutePlanTechnician")
+  routePlansApplied RoutePlan[]               @relation("RoutePlanAppliedBy")
 
   @@index([role, active])
 }
@@ -449,22 +458,27 @@ model Contact {
 }
 
 model Property {
-  id           String   @id @default(cuid())
-  clientId     String
-  label        String?
-  addressLine1 String
-  addressLine2 String?
-  suburb       String
-  state        String   @default("VIC")
-  postcode     String
-  lat          Float?
-  lng          Float?
-  accessNotes  String?
-  parkingNotes String?
-  petNotes     String?
-  keyInfo      String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String         @id @default(cuid())
+  clientId      String
+  label         String?
+  addressLine1  String
+  addressLine2  String?
+  suburb        String
+  state         String         @default("VIC")
+  postcode      String
+  lat           Float?
+  lng           Float?
+  /// How lat/lng were found (route planning). Null with lat null = not located yet.
+  geocodeSource GeocodeSource?
+  geocodedAt    DateTime?
+  /// Last geocoding failure ("Address not found"), cleared on success or address change.
+  geocodeError  String?
+  accessNotes   String?
+  parkingNotes  String?
+  petNotes      String?
+  keyInfo       String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
   client           Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
   equipment        Equipment[]
@@ -693,6 +707,8 @@ model Job {
   refrigerantAddedKg      Decimal?         @db.Decimal(6, 2)
   gasComplianceCertNumber String?
   onHoldReason            String?
+  /// Customer-agreed time: route planning never moves it.
+  timeFixed               Boolean          @default(false)
   createdAt               DateTime         @default(now())
   updatedAt               DateTime         @updatedAt
   deletedAt               DateTime?
@@ -1313,8 +1329,8 @@ model AuditLog {
 }
 
 model BusinessSettings {
-  id                      String       @id @default("singleton")
-  businessName            String       @default("Cooling Service Melbourne")
+  id                      String         @id @default("singleton")
+  businessName            String         @default("Cooling Service Melbourne")
   tradingName             String?
   abn                     String?
   email                   String?
@@ -1323,30 +1339,37 @@ model BusinessSettings {
   addressLine1            String?
   addressLine2            String?
   suburb                  String?
-  state                   String       @default("VIC")
+  state                   String         @default("VIC")
   postcode                String?
   logoUrl                 String?
   bankName                String?
   bsb                     String?
   accountNumber           String?
   accountName             String?
-  gstRegistered           Boolean      @default(true)
-  defaultPaymentTerms     PaymentTerms @default(DAYS_14)
-  defaultPaymentTermsDays Int          @default(14)
-  quoteValidityDays       Int          @default(30)
-  quotePrefix             String       @default("Q")
-  jobPrefix               String       @default("J")
-  invoicePrefix           String       @default("INV")
-  creditNotePrefix        String       @default("CN")
+  gstRegistered           Boolean        @default(true)
+  defaultPaymentTerms     PaymentTerms   @default(DAYS_14)
+  defaultPaymentTermsDays Int            @default(14)
+  quoteValidityDays       Int            @default(30)
+  quotePrefix             String         @default("Q")
+  jobPrefix               String         @default("J")
+  invoicePrefix           String         @default("INV")
+  creditNotePrefix        String         @default("CN")
   invoiceFooter           String?
   quoteTerms              String?
   emailTemplates          Json?
   smsSettings             Json? // { enabled: { onMyWay: true, … }, templates: { onMyWay: "…", … } }
   xeroSettings            Json? // account codes, tax types, bank account, invoice status, auto sync
   xeroTenantId            String? // organisation the stored Xero IDs belong to (cleared when it changes)
-  timezone                String       @default("Australia/Melbourne")
-  createdAt               DateTime     @default(now())
-  updatedAt               DateTime     @updatedAt
+  timezone                String         @default("Australia/Melbourne")
+  /// Route planning: technicians leave the start point at this time (HH:mm, Melbourne).
+  routeDayStart           String         @default("07:00")
+  /// Depot (business address) location, the default start and end of every route.
+  depotLat                Float?
+  depotLng                Float?
+  depotGeocodeSource      GeocodeSource?
+  depotGeocodeError       String?
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
 }
 
 model Counter {
@@ -1355,4 +1378,38 @@ model Counter {
   value     Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+enum GeocodeSource {
+  GOOGLE // Google Geocoding API
+  SUBURB // approximate: centre of the suburb (no API key, or Google found nothing better)
+  SEED // demo data
+}
+
+/// A route plan that was applied to a technician's day, kept so it can be undone.
+model RoutePlan {
+  id            String    @id @default(cuid())
+  technicianId  String
+  /// Melbourne day, yyyy-MM-dd.
+  date          String
+  appliedById   String?
+  /// "google" or "estimate"
+  provider      String
+  /// [{ jobId, number, start, end }] before the plan was applied (ISO strings).
+  previous      Json
+  /// [{ jobId, number, start, end }] as applied.
+  applied       Json
+  beforeKm      Float
+  afterKm       Float
+  beforeMinutes Int
+  afterMinutes  Int
+  undoneAt      DateTime?
+  undoneById    String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  technician User  @relation("RoutePlanTechnician", fields: [technicianId], references: [id], onDelete: Cascade)
+  appliedBy  User? @relation("RoutePlanAppliedBy", fields: [appliedById], references: [id], onDelete: SetNull)
+
+  @@index([technicianId, date])
 }

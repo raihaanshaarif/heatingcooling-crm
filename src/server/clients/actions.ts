@@ -8,6 +8,15 @@ import { NotFoundError, UserError, idSchema, runAction } from "@/server/action";
 import { audit, diff, logActivity } from "@/server/audit";
 import { kickXeroSync, queueContactUpdate } from "@/server/xero/queue";
 import { kickCalendarSync, queueCalendarSyncForJobs } from "@/server/google-calendar/queue";
+import { geocodeProperty, kickGeocode } from "@/server/routes/geocode";
+
+const NOT_LOCATED = {
+  lat: null,
+  lng: null,
+  geocodeSource: null,
+  geocodedAt: null,
+  geocodeError: null,
+} as const;
 
 function clientData(d: z.output<typeof clientSchema>) {
   return {
@@ -36,20 +45,23 @@ export async function createClient(input: z.input<typeof clientSchema>) {
     { schema: clientSchema, permission: ["create", "clients"] },
     input,
     async (d, user) => {
+      let newPropertyId: string | null = null;
       const client = await db.$transaction(async (tx) => {
         const created = await tx.client.create({ data: clientData(d) });
         if (d.createPropertyFromBilling && d.billingLine1 && d.billingSuburb && d.billingPostcode) {
-          await tx.property.create({
-            data: {
-              clientId: created.id,
-              label: "Home",
-              addressLine1: d.billingLine1,
-              addressLine2: d.billingLine2,
-              suburb: d.billingSuburb,
-              state: d.billingState,
-              postcode: d.billingPostcode,
-            },
-          });
+          newPropertyId = (
+            await tx.property.create({
+              data: {
+                clientId: created.id,
+                label: "Home",
+                addressLine1: d.billingLine1,
+                addressLine2: d.billingLine2,
+                suburb: d.billingSuburb,
+                state: d.billingState,
+                postcode: d.billingPostcode,
+              },
+            })
+          ).id;
         }
         await audit(tx, {
           userId: user.id,
@@ -66,6 +78,10 @@ export async function createClient(input: z.input<typeof clientSchema>) {
         });
         return created;
       });
+      if (newPropertyId) {
+        const propertyId = newPropertyId;
+        kickGeocode(() => geocodeProperty(propertyId));
+      }
       revalidatePath("/clients");
       return { id: client.id };
     },
@@ -190,11 +206,21 @@ export async function saveProperty(id: string | null, input: z.input<typeof prop
     { schema: propertySchema, permission: ["update", "clients"] },
     input,
     async (d, user) => {
+      let moved = !id;
       const property = await db.$transaction(async (tx) => {
         const before = id ? await tx.property.findUnique({ where: { id } }) : null;
         if (id && !before) throw new NotFoundError("Property");
+        // A new or changed address is located again (in the background, after saving).
+        moved =
+          !before ||
+          (["addressLine1", "addressLine2", "suburb", "state", "postcode"] as const).some(
+            (k) => (before[k] ?? null) !== (d[k] ?? null),
+          );
         const saved = id
-          ? await tx.property.update({ where: { id }, data: d })
+          ? await tx.property.update({
+              where: { id },
+              data: { ...d, ...(moved ? NOT_LOCATED : {}) },
+            })
           : await tx.property.create({ data: d });
         await audit(tx, {
           userId: user.id,
@@ -214,6 +240,7 @@ export async function saveProperty(id: string | null, input: z.input<typeof prop
         }
         return saved;
       });
+      if (moved) kickGeocode(() => geocodeProperty(property.id));
       revalidatePath(`/clients/${d.clientId}`);
       revalidatePath(`/properties/${property.id}`);
       return { id: property.id };

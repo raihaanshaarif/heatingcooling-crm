@@ -45,6 +45,15 @@ describe("permissions", () => {
     expect(canViewPath(office, "/suppliers")).toBe(true);
   });
 
+  it("lets office and admin plan routes; technicians only see theirs", () => {
+    expect(can(admin, "update", "routes")).toBe(true);
+    expect(can(office, "update", "routes")).toBe(true);
+    expect(can(tech, "view", "routes")).toBe(true);
+    expect(can(tech, "update", "routes")).toBe(false);
+    expect(canViewPath(tech, "/schedule/route")).toBe(false);
+    expect(canViewPath(office, "/schedule/route")).toBe(true);
+  });
+
   it("denies anonymous users", () => {
     expect(can(null, "view", "dashboard")).toBe(false);
     expect(can(undefined, "view", "myJobs")).toBe(false);

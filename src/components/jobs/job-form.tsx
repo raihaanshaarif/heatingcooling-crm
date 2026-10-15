@@ -77,6 +77,7 @@ export function JobForm({
       scheduledStart: toDateTimeInput(job ? job.scheduledStart : defaults.scheduledStart),
       scheduledEnd: toDateTimeInput(job ? job.scheduledEnd : defaults.scheduledEnd),
       estimatedMinutes: job?.estimatedMinutes != null ? String(job.estimatedMinutes) : "",
+      timeFixed: job?.timeFixed ?? false,
       assigneeIds: job?.assignments.map((a) => a.userId) ?? defaults.assigneeIds ?? [],
       equipmentIds: job?.equipment.map((e) => e.equipmentId) ?? [],
       applyChecklist: !job,
@@ -169,6 +170,12 @@ export function JobForm({
             label="End"
             type="datetime-local"
             description="Leave blank to use the estimate."
+          />
+          <SwitchField
+            name="timeFixed"
+            label="Time fixed"
+            description="Agreed with the customer: route planning won't move this job."
+            className="sm:col-span-2"
           />
         </div>
         <TextareaField

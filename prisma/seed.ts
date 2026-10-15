@@ -56,6 +56,7 @@ import {
 } from "../src/lib/sms/templates";
 import { addQty, levelsFromMovements, stockStatus } from "../src/lib/inventory";
 import { DEFAULT_XERO_SETTINGS } from "../src/lib/xero/settings";
+import { suburbCentre } from "../src/lib/routes/suburbs";
 
 const prisma = new PrismaClient();
 
@@ -99,6 +100,24 @@ const letters = (n: number): string =>
 const mobile = (): string => `04${digits(2)} ${digits(3)} ${digits(3)}`;
 const landline = (): string => `(03) 9${digits(3)} ${digits(4)}`;
 const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+/**
+ * Demo map location for a seeded address: the real centre of its Melbourne suburb, nudged
+ * up to ~1.5 km by a hash of the street address (stable between seeds, no RNG used) so
+ * neighbours don't sit on top of each other. Real sites are geocoded with Google.
+ */
+function demoLocation(address: string, suburb: string): { lat: number; lng: number } | null {
+  const centre = suburbCentre(suburb);
+  if (!centre) return null;
+  let h = 2166136261;
+  for (const ch of address) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+  const a = ((h & 0xffff) / 0xffff) * 2 - 1;
+  const b = ((h >>> 16) / 0xffff) * 2 - 1;
+  return {
+    lat: Math.round((centre.lat + a * 0.012) * 1e6) / 1e6,
+    lng: Math.round((centre.lng + b * 0.015) * 1e6) / 1e6,
+  };
+}
 
 // ─── Melbourne date helpers ─────────────────────────────────────────────────
 
@@ -2337,6 +2356,111 @@ async function resetDatabase(): Promise<void> {
   await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${list} RESTART IDENTITY CASCADE`);
 }
 
+/**
+ * Six jobs for tech1 on the next free weekday, booked in an order that criss-crosses Melbourne
+ * (west, bayside, inner west, bayside…), so Schedule → Plan route has something to fix.
+ * One is "Time fixed" (customer only home 1–2 pm) and must stay put.
+ */
+async function seedRouteDemo(input: {
+  tech1: { id: string };
+  allProps: PropRef[];
+  firstJobNo: number;
+}): Promise<{ lastJobNo: number; day: string }> {
+  // The next weekday with nothing else booked for Jack.
+  let offset = weekday(1, 1);
+  for (let tries = 0; tries < 10; tries++) {
+    const busy = await prisma.job.count({
+      where: {
+        assignments: { some: { userId: input.tech1.id } },
+        scheduledStart: { gte: at(offset, 0), lt: at(offset + 1, 0) },
+      },
+    });
+    if (!busy) break;
+    offset = weekday(offset + 1, 1);
+  }
+  const plan: {
+    suburb: string;
+    start: number;
+    minutes: number;
+    type: JobType;
+    title: string;
+    timeFixed?: boolean;
+    note?: string;
+  }[] = [
+    {
+      suburb: "Werribee",
+      start: 450,
+      minutes: 90,
+      type: "SERVICE",
+      title: "Ducted system service",
+    },
+    {
+      suburb: "Mentone",
+      start: 570,
+      minutes: 60,
+      type: "REPAIR",
+      title: "Split system not cooling",
+    },
+    {
+      suburb: "Footscray",
+      start: 660,
+      minutes: 60,
+      type: "SERVICE",
+      title: "Split system service",
+    },
+    {
+      suburb: "Cheltenham",
+      start: 780,
+      minutes: 60,
+      type: "INSPECTION",
+      title: "Gas heater safety check",
+      timeFixed: true,
+      note: "Customer is only home 1–2 pm.",
+    },
+    {
+      suburb: "Point Cook",
+      start: 870,
+      minutes: 60,
+      type: "SERVICE",
+      title: "Evaporative cooler service",
+    },
+    {
+      suburb: "Mordialloc",
+      start: 960,
+      minutes: 60,
+      type: "QUOTE_VISIT",
+      title: "Quote: new split system",
+    },
+  ];
+  let jobNo = input.firstJobNo;
+  for (const p of plan) {
+    const prop = input.allProps.find((x) => x.suburb === p.suburb && !x.client.doNotService);
+    if (!prop) continue;
+    jobNo += 1;
+    const start = at(offset, p.start);
+    const createdAt = clampPast(at(-2, 600 + (jobNo % 60)));
+    await prisma.job.create({
+      data: {
+        number: formatDocumentNumber("J", jobNo),
+        clientId: prop.client.id,
+        propertyId: prop.id,
+        type: p.type,
+        status: "SCHEDULED",
+        priority: "NORMAL",
+        title: p.title,
+        description: p.note ?? null,
+        scheduledStart: start,
+        scheduledEnd: addMinutes(start, p.minutes),
+        estimatedMinutes: p.minutes,
+        timeFixed: p.timeFixed ?? false,
+        createdAt,
+        assignments: { create: [{ userId: input.tech1.id, createdAt }] },
+      },
+    });
+  }
+  return { lastJobNo: jobNo, day: dayStr(offset) };
+}
+
 async function main(): Promise<void> {
   const started = Date.now();
   await resetDatabase();
@@ -2470,6 +2594,11 @@ async function main(): Promise<void> {
       suburb: "Braeside",
       state: "VIC",
       postcode: "3195",
+      // Depot for route planning (Braeside industrial estate).
+      depotLat: -37.9917,
+      depotLng: 145.1186,
+      depotGeocodeSource: "SEED",
+      routeDayStart: "07:00",
       bankName: "Commonwealth Bank",
       bsb: "063-000",
       accountNumber: "1234 5678",
@@ -2594,12 +2723,17 @@ async function main(): Promise<void> {
     };
     clients.set(c.key, ref);
     for (const p of c.properties) {
+      const location = demoLocation(p.addressLine1, p.suburb);
       const created = await prisma.property.create({
         data: {
           clientId: client.id,
           label: p.label ?? null,
           addressLine1: p.addressLine1,
           suburb: p.suburb,
+          lat: location?.lat ?? null,
+          lng: location?.lng ?? null,
+          geocodeSource: location ? "SEED" : null,
+          geocodedAt: location ? createdAt : null,
           state: "VIC",
           postcode: p.postcode,
           accessNotes: p.accessNotes ?? null,
@@ -5125,6 +5259,10 @@ async function main(): Promise<void> {
     ],
   });
 
+  // ── Route planning demo: Jack's next working day, booked in a zig-zag ──
+  const routeDemo = await seedRouteDemo({ tech1, allProps, firstJobNo: jobNo });
+  jobNo = routeDemo.lastJobNo;
+
   // ── Counters ──
   await prisma.counter.createMany({
     data: [
@@ -5153,6 +5291,7 @@ async function main(): Promise<void> {
     stockMovements: inventory.movements,
     lowStock: inventory.low.length,
     smsLogged: smsCount,
+    routeDemoDay: routeDemo.day,
   };
   console.log("\nSeed complete in", ((Date.now() - started) / 1000).toFixed(1), "s");
   console.table(counts);

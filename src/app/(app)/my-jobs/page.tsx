@@ -1,8 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronRight, Clock, MapPin, Truck } from "lucide-react";
+import { ChevronRight, Clock, MapPin, Navigation, Truck } from "lucide-react";
 import { requirePermission } from "@/lib/auth/session";
-import { addMelbourneDays, formatDate, formatTime, startOfMelbourneDay } from "@/lib/dates";
+import { can } from "@/lib/permissions";
+import {
+  addMelbourneDays,
+  formatDate,
+  formatTime,
+  fromMelbourneInput,
+  startOfMelbourneDay,
+  toDateInput,
+} from "@/lib/dates";
+import { getDayRouteLinks } from "@/server/routes/service";
 import { formatAddress } from "@/lib/utils";
 import { getMyJobs } from "@/server/jobs/queries";
 import { Button } from "@/components/ui/button";
@@ -73,6 +82,23 @@ export default async function MyJobsPage() {
   const upcoming = jobs.filter(
     (j) => !active.includes(j) && j.scheduledStart && j.scheduledStart >= tomorrow,
   );
+  // Today's route in Google Maps, in booked order (works without any API key).
+  const canRoute = can(user, "view", "routes");
+  const route =
+    canRoute && todays.length + active.length > 0
+      ? await getDayRouteLinks(user.id, toDateInput(today))
+      : null;
+  // …and for the next few days with work, so the night before they can check tomorrow's run.
+  const nextDays = [
+    ...new Set(upcoming.map((j) => (j.scheduledStart ? toDateInput(j.scheduledStart) : ""))),
+  ]
+    .filter(Boolean)
+    .slice(0, 3);
+  const nextRoutes = canRoute
+    ? await Promise.all(
+        nextDays.map(async (day) => ({ day, ...(await getDayRouteLinks(user.id, day)) })),
+      )
+    : [];
   const groups = [
     { title: "In progress", jobs: active },
     { title: "Missed / not closed", jobs: overdue },
@@ -95,6 +121,37 @@ export default async function MyJobsPage() {
         }
       />
       <div className="mx-auto max-w-2xl space-y-6">
+        {route && route.urls.length > 0 && (
+          <div className="flex flex-wrap gap-2" data-testid="my-route">
+            {route.urls.map((url, i) => (
+              <Button key={url} asChild className="h-11 flex-1">
+                <a href={url} target="_blank" rel="noopener noreferrer">
+                  <Navigation /> Open today&apos;s route in Google Maps
+                  {route.urls.length > 1 ? ` (${i + 1}/${route.urls.length})` : ""}
+                </a>
+              </Button>
+            ))}
+            <p className="text-muted-foreground w-full text-xs">
+              {route.stops} stop{route.stops === 1 ? "" : "s"} in booked order, then back to the
+              start.
+            </p>
+          </div>
+        )}
+        {nextRoutes.some((r) => r.urls.length) && (
+          <div className="flex flex-wrap gap-2" data-testid="next-route">
+            {nextRoutes.flatMap((r) =>
+              r.urls.map((url, i) => (
+                <Button key={url} asChild variant="outline" size="sm">
+                  <a href={url} target="_blank" rel="noopener noreferrer">
+                    <Navigation /> {formatDate(fromMelbourneInput(r.day), "EEE d MMM")} route (
+                    {r.stops} stop{r.stops === 1 ? "" : "s"})
+                    {r.urls.length > 1 ? ` ${i + 1}/${r.urls.length}` : ""}
+                  </a>
+                </Button>
+              )),
+            )}
+          </div>
+        )}
         {groups
           .filter((g) => g.jobs.length > 0 || g.always)
           .map((g) => (

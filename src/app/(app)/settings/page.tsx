@@ -34,6 +34,9 @@ import { XERO_JOB_STATUS_LABELS, XeroLogTable } from "@/components/xero/xero-log
 import { RetryAllFailedButton, SyncNowButton } from "@/components/xero/xero-connection-actions";
 import { resolveXeroSettings } from "@/lib/xero/settings";
 import { getXeroOptions, getXeroOverview, listXeroLog } from "@/server/xero/queries";
+import { getRouteOverview } from "@/server/routes/queries";
+import { GeocodeMissingButton, RouteSettingsForm } from "@/components/routes/route-settings";
+import { RouteOverviewText } from "@/components/routes/route-overview";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -46,6 +49,7 @@ const TABS = [
   { value: "sms-log", label: "SMS log" },
   { value: "xero", label: "Xero" },
   { value: "xero-log", label: "Xero sync log" },
+  { value: "routes", label: "Routes" },
   { value: "checklists", label: "Checklists" },
   { value: "users", label: "Users" },
 ] as const;
@@ -308,6 +312,27 @@ export default async function SettingsPage({
         </nav>
         <XeroLogTable rows={rows} canRetry={overview.state === "connected"} />
       </div>
+    );
+  } else if (tab === "routes") {
+    const overview = await getRouteOverview();
+    content = (
+      <Card>
+        <CardHeader>
+          <CardTitle>Route planning</CardTitle>
+          <CardDescription>
+            {overview.googleConfigured
+              ? "Using Google Maps for addresses and drive times."
+              : "Estimating drive times from straight-line distances (add GOOGLE_MAPS_API_KEY for real drive times)."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <RouteSettingsForm routeDayStart={settings.routeDayStart} />
+          <div className="text-muted-foreground space-y-2 text-sm">
+            <RouteOverviewText overview={overview} />
+            <GeocodeMissingButton />
+          </div>
+        </CardContent>
+      </Card>
     );
   } else if (tab === "checklists") {
     const templates = await db.jobChecklistTemplate.findMany({ orderBy: { name: "asc" } });

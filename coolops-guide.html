@@ -118,15 +118,23 @@ footer{color:var(--muted);font-size:.85rem;text-align:center;padding:24px 16px}
     <li><a href="#account">My account</a></li>
     <li><a href="#website">Website enquiry form</a></li>
   </ol>
-  <h2>Looking after it</h2>
+  <h2>Add-ons</h2>
   <ol start="30">
+    <li><a href="#inventory">Inventory and van stock</a></li>
+    <li><a href="#sms">SMS texts</a></li>
+    <li><a href="#xero">Xero (live sync)</a></li>
+    <li><a href="#gcal">Google Calendar sync</a></li>
+    <li><a href="#routes">Route optimisation</a></li>
+  </ol>
+  <h2>Looking after it</h2>
+  <ol start="35">
     <li><a href="#local">Try it on your own computer</a></li>
     <li><a href="#update">Updating the app</a></li>
     <li><a href="#backup">Backups and restoring</a></li>
     <li><a href="#trouble">Troubleshooting</a></li>
     <li><a href="#faq">Questions and answers</a></li>
     <li><a href="#glossary">Glossary</a></li>
-    <li><a href="#later">Not built yet</a></li>
+    <li><a href="#later">What's included</a></li>
     <li><a href="#dev">For developers</a></li>
   </ol>
 </nav>
@@ -147,6 +155,7 @@ footer{color:var(--muted);font-size:.85rem;text-align:center;padding:24px 16px}
   <li><strong>Invoices and Payments</strong>: proper Australian tax invoices with GST, payments, credit notes, overdue reminders.</li>
   <li><strong>Maintenance plans</strong>: yearly or regular services, with automatic reminder emails.</li>
   <li><strong>Reports</strong>: revenue, lead sources, unpaid invoices and more, exportable for your accountant.</li>
+  <li><strong>Add-ons</strong>: stock in the warehouse and each van, SMS texts to clients, live Xero sync, jobs in each person's Google Calendar, and route planning for technicians (sections 30 to 34).</li>
 </ul>
 <p>Everything is in Australian dollars, GST is 10%, and all times are Melbourne time, whatever device you use.</p>
 <a class="top" href="#top">Back to top ↑</a>
@@ -276,6 +285,13 @@ git push -u origin main</code></pre>
 <tr><td><code>STORAGE_DRIVER</code></td><td>Yes</td><td><code>local</code> (files on the server volume) or <code>s3</code> (Cloudflare R2, AWS S3, Supabase).</td><td><code>local</code></td></tr>
 <tr><td><code>STORAGE_LOCAL_DIR</code></td><td>With local</td><td>Folder for uploads. Must match the volume path.</td><td><code>/app/uploads</code></td></tr>
 <tr><td><code>STORAGE_S3_ENDPOINT</code>, <code>STORAGE_S3_REGION</code>, <code>STORAGE_S3_BUCKET</code>, <code>STORAGE_S3_ACCESS_KEY_ID</code>, <code>STORAGE_S3_SECRET_ACCESS_KEY</code>, <code>STORAGE_S3_PUBLIC_URL</code></td><td>With s3 only</td><td>Details from your storage provider.</td><td>—</td></tr>
+<tr><td><code>SMS_PROVIDER</code></td><td>For SMS</td><td><code>twilio</code> or <code>messagemedia</code>. Plus that provider's keys below and <code>SMS_FROM</code>. See section 31.</td><td><code>messagemedia</code></td></tr>
+<tr><td><code>TWILIO_ACCOUNT_SID</code>, <code>TWILIO_AUTH_TOKEN</code>, <code>TWILIO_MESSAGING_SERVICE_SID</code></td><td>Twilio only</td><td>From your Twilio console.</td><td>—</td></tr>
+<tr><td><code>MESSAGEMEDIA_API_KEY</code>, <code>MESSAGEMEDIA_API_SECRET</code></td><td>MessageMedia only</td><td>From your MessageMedia account.</td><td>—</td></tr>
+<tr><td><code>SMS_FROM</code></td><td>For SMS</td><td>The number or sender name texts come from.</td><td><code>+61400000000</code></td></tr>
+<tr><td><code>XERO_CLIENT_ID</code>, <code>XERO_CLIENT_SECRET</code></td><td>For Xero</td><td>From your app at developer.xero.com. See section 32.</td><td>—</td></tr>
+<tr><td><code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code></td><td>For Google Calendar</td><td>From Google Cloud Console. See section 33.</td><td>—</td></tr>
+<tr><td><code>GOOGLE_MAPS_API_KEY</code></td><td>Optional</td><td>Real drive times and maps for route planning. Without it, routes use estimates. See section 34.</td><td><code>AIza…</code></td></tr>
 </table></div>
 <p>After changing any variable, click <span class="ui">Redeploy</span> (or <span class="ui">Restart</span>) so the app picks it up.</p>
 <a class="top" href="#top">Back to top ↑</a>
@@ -317,7 +333,7 @@ git push -u origin main</code></pre>
 <h3>Going live: clear the demo data</h3>
 <p>When you have finished practising, remove the example records but keep your admin login, settings and checklist templates:</p>
 <ol>
-  <li>First take a backup (<a href="#backup">section 32</a>).</li>
+  <li>First take a backup (<a href="#backup">section 37</a>).</li>
   <li>In Coolify open the <strong>database</strong> (not the app), go to <span class="ui">Terminal</span>, type <code>psql -U postgres -d postgres</code> and press <kbd>Enter</kbd>. (If you named the database differently, use that name after <code>-d</code>.)</li>
   <li>Paste the block below and press <kbd>Enter</kbd>. Then type <code>\q</code> to leave.</li>
 </ol>
@@ -634,7 +650,7 @@ COMMIT;</code></pre>
 <tr><td>Clients due for service</td><td>Who should we call for their next service?</td></tr>
 </table></div>
 <h3>Xero</h3>
-<p><span class="ui">Integrations</span> has a <strong>Xero export</strong> → <span class="ui">Download all invoices</span>: a CSV of sent invoices in Xero's sales-invoice import format (account code 200). In Xero use <span class="ui">Business → Invoices → Import</span>. Automatic two-way Xero sync is not built yet.</p>
+<p><span class="ui">Integrations</span> has a <strong>Xero export</strong> → <span class="ui">Download all invoices</span>: a CSV of sent invoices in Xero's sales-invoice import format (account code 200). In Xero use <span class="ui">Business → Invoices → Import</span>. For automatic sending to Xero, see <a href="#xero">section 32</a>.</p>
 <a class="top" href="#top">Back to top ↑</a>
 </section>
 
@@ -661,6 +677,9 @@ COMMIT;</code></pre>
 <tr><td>Email templates</td><td>Subject and message for quote sent, invoice sent, invoice overdue and service due. Use placeholders like <code>{{clientName}}</code>, <code>{{number}}</code>, <code>{{total}}</code>, <code>{{dueDate}}</code>, <code>{{balance}}</code>, <code>{{businessName}}</code>; each template lists the ones it accepts.</td></tr>
 <tr><td>Checklists</td><td>Checklist steps for each job type and service category. Changes apply to new checklists; existing jobs keep theirs.</td></tr>
 <tr><td>Users</td><td>A shortcut to add users (same as Team).</td></tr>
+<tr><td>SMS / SMS log</td><td>Which texts go out automatically, their wording, and every text sent (<a href="#sms">section 31</a>).</td></tr>
+<tr><td>Xero / Xero sync log</td><td>Account codes, tax rates and bank account for Xero, and what has synced (<a href="#xero">section 32</a>).</td></tr>
+<tr><td>Routes</td><td>Day start time and depot for route planning (<a href="#routes">section 34</a>).</td></tr>
 </table></div>
 <a class="top" href="#top">Back to top ↑</a>
 </section>
@@ -727,8 +746,238 @@ COMMIT;</code></pre>
 </section>
 
 <!-- 30 -->
+<section id="inventory">
+<h2>30. Inventory and van stock</h2>
+<p><strong>What it does.</strong> CoolOps keeps count of the parts you stock (capacitors, filters, R32 and R410A in kg, drain pumps, isolators, brackets, pipe and so on) in the warehouse and in each technician's van. When a technician adds a part to a job, it comes out of their van by itself. When something runs low, the office gets a notification and the dashboard shows it. Every change is kept in a history, so you can always see why a number is what it is.</p>
+<p><strong>Setup (no API keys needed, it's built in).</strong></p>
+<ol type="1">
+<li>Go to <strong>Suppliers</strong> (left menu, under Admin) and click <strong>New supplier</strong> for each wholesaler you buy from: name, phone, email, your account number.</li>
+<li>Make sure each part you want to track is in the <strong>Price book</strong> as a <em>Part</em> or <em>Equipment</em> item, with its cost price. Labour and call-out fees can't be stocked.</li>
+<li>Go to <strong>Inventory</strong> and click <strong>Track item</strong>. Pick the part, set the <strong>Reorder level</strong> (for example 6 capacitors or 10 kg of R410A) and the usual supplier. Repeat for each part you keep.</li>
+<li>Load what you have now: on Inventory click <strong>Adjust / stocktake</strong>, choose the part and location, leave <strong>Change</strong> on <em>Set to counted quantity</em>, type the count and pick the reason <em>Stocktake count</em>. Do this for the warehouse and each van. (Or use <strong>Receive stock</strong> if the stock is arriving from a supplier.)</li>
+</ol>
+<p>Each technician gets their own van automatically (for example "Jack Wilson's van"). Add a new technician under <strong>Team</strong> and their van appears.</p>
+<p><strong>Day to day: how do I…</strong></p>
+<ul>
+<li><strong>…record a delivery?</strong> Inventory → <strong>Receive stock</strong>. Choose the supplier, <strong>Receive into</strong> (usually Warehouse), type the invoice or docket number, then add each item and quantity (<strong>Add item</strong> for more lines). The owner also sees <strong>Unit cost</strong> and can tick <em>Update the price book cost price to what we paid</em> to keep job margins accurate. Click <strong>Receive stock</strong>.</li>
+<li><strong>…load a van?</strong> Inventory → <strong>Transfer</strong>. From <em>Warehouse</em> to the technician's van, add the items and quantities, click <strong>Move stock</strong>. The form shows how many are on hand. Moving stock back to the warehouse works the same way.</li>
+<li><strong>…do a stocktake or fix a count?</strong> Inventory → <strong>Adjust / stocktake</strong>. Choose the item and location. Use <em>Set to counted quantity</em> to type what you counted, or <em>Add</em> / <em>Remove</em> for a known amount. Pick a reason (damaged, lost, returned to supplier…) and add a note if useful.</li>
+<li><strong>…see what's low?</strong> Inventory → <strong>Low stock</strong>. It lists parts whose total across the warehouse and vans is below the reorder level, with a <em>Suggested order</em> quantity. The dashboard's <strong>Low stock</strong> tile opens the same list.</li>
+<li><strong>…see one van?</strong> Inventory → <strong>Stock levels</strong>, then click the van name next to <em>Location</em>.</li>
+<li><strong>…find out where stock went?</strong> Inventory → <strong>Movements</strong>. Filter by <strong>Type</strong> or <strong>Location</strong>, or search for an item or job number. Job usage links to the job.</li>
+<li><strong>…export stock levels?</strong> Inventory → <strong>Export CSV</strong> (all locations, or the location you have selected). Opens in Excel.</li>
+<li><strong>…use parts on a job?</strong> Nothing extra: on the job, <strong>Add part / labour</strong> and pick the part. The toast says which van it came from and how many are left. Removing the line puts the part back. Lines that came from an accepted quote show a <strong>Take from stock</strong> link; click it once the parts are actually used.</li>
+<li><strong>…handle a negative number?</strong> It means more was used than the count showed (a red number and "Negative" flag). Recount with <strong>Adjust / stocktake</strong>, or record the delivery or transfer that was missed.</li>
+<li><strong>…stop tracking a part?</strong> Owner only: on the item's <strong>⋯</strong> menu click <strong>Stop tracking</strong>. Its history is kept.</li>
+</ul>
+<p><strong>Technicians</strong> open <strong>My jobs → My van stock</strong> on their phone to see what's in their van and recent movements. They can't change stock themselves; adding parts to their jobs does that.</p>
+<p><strong>Who sees what.</strong> Office staff can see and move stock and manage suppliers. Only the owner (admin) sees cost prices, stock value and can stop tracking items or delete suppliers.</p>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 31 -->
+<section id="sms">
+<h2>31. SMS texts</h2>
+<p>CoolOps can text your clients automatically:</p>
+<ul>
+<li><strong>On my way</strong>: when a technician taps <strong>On my way</strong> on a job, the client gets a text with the technician's first name and your business name.</li>
+<li><strong>Appointment reminder</strong>: at 8am the day before a booked job.</li>
+<li><strong>Service due</strong>: when a maintenance plan is due within 14 days, together with the email reminder.</li>
+<li><strong>Overdue invoice</strong> (off unless you turn it on): at 1, 7 and 14 days overdue, with a link to view the invoice.</li>
+</ul>
+<p>The office can also send a one-off text from any client or job page.</p>
+<p>Every text is recorded. You can see it in the client's <strong>Activity</strong> tab, in the job's <strong>Activity</strong> card, and in <strong>Settings → SMS log</strong>.</p>
+<h4>Setting it up (once)</h4>
+<p>Until you connect an SMS provider, CoolOps only <em>records</em> texts (they show as "Logged only"). Nothing reaches clients. To start sending real texts:</p>
+<p><strong>Option A: MessageMedia</strong> (Australian company, recommended)</p>
+<ol type="1">
+<li>Sign up at messagemedia.com (now part of Sinch) and add credit.</li>
+<li>In the MessageMedia Hub go to <strong>Settings → API settings</strong> and create a new API key. Choose <strong>Basic authentication</strong>, then copy the <em>API key</em> and <em>API secret</em>.</li>
+<li>Optional: buy a dedicated number so clients can reply, or register a sender name such as "CoolService" (clients can't reply to a sender name).</li>
+</ol>
+<p><strong>Option B: Twilio</strong></p>
+<ol type="1">
+<li>Sign up at twilio.com, upgrade to a paid account and buy an Australian mobile number (or register an alphanumeric sender ID).</li>
+<li>Copy the <em>Account SID</em> and <em>Auth Token</em> from the Twilio Console home page.</li>
+</ol>
+<p><strong>Then, in Coolify</strong> (your app → Environment Variables), add:</p>
+<ul>
+<li>MessageMedia: <code>SMS_PROVIDER=messagemedia</code>, <code>MESSAGEMEDIA_API_KEY=…</code>, <code>MESSAGEMEDIA_API_SECRET=…</code>, and optionally <code>SMS_FROM=+614…</code> or your sender name.</li>
+<li>Twilio: <code>SMS_PROVIDER=twilio</code>, <code>TWILIO_ACCOUNT_SID=…</code>, <code>TWILIO_AUTH_TOKEN=…</code>, <code>SMS_FROM=+614…</code> (your Twilio number, sender name, or Messaging Service SID starting with MG).</li>
+</ul>
+<p>Redeploy the app. <strong>Integrations</strong> should now show the SMS card as <em>MessageMedia</em> or <em>Twilio</em> instead of <em>Not set up</em>. If something is missing, the card names the setting you still need to add.</p>
+<h4>Choosing which texts go out and what they say (admin)</h4>
+<ol type="1">
+<li>Go to <strong>Settings → SMS</strong>.</li>
+<li>Use the switch next to each automatic text to turn it on or off.</li>
+<li>Edit the wording in <strong>Message</strong>. Words in double curly brackets, like <code>{{clientName}}</code> or <code>{{techName}}</code>, are filled in automatically. The list under each box shows which ones you can use.</li>
+<li>The preview shows the text with example details, plus how many characters and SMS it uses. One SMS holds 160 characters; longer texts are billed as 2 or more. An emoji drops the limit to 70 characters per SMS, and the preview warns you.</li>
+<li>Click <strong>Save SMS settings</strong>.</li>
+</ol>
+<p>The <strong>Running late</strong> and <strong>General message</strong> templates are only used for one-off texts.</p>
+<h4>How do I…</h4>
+<ul>
+<li><strong>Text a client right now?</strong> Open the client (or one of their jobs), click <strong>SMS</strong>, pick a template from <strong>Template</strong>, edit the message, and click <strong>Send SMS</strong>. The counter under the message shows the length.</li>
+<li><strong>Stop texting a client who asked us not to?</strong> Open the client, click <strong>Edit</strong>, switch on <strong>No SMS</strong>, and click <strong>Save changes</strong>. They get no texts at all, and the <strong>SMS</strong> button explains why. A "No SMS" badge appears next to their name.</li>
+<li><strong>Find out why a client didn't get a text?</strong> Look at the job or client <strong>Activity</strong>, or <strong>Settings → SMS log</strong>. Each entry has a status: <em>Sent</em>, <em>Logged only</em> (provider not set up), <em>Not sent</em> (with the reason, e.g. "Landline number, can't receive texts" or "Client has opted out of SMS"), or <em>Failed</em> (the provider's error).</li>
+<li><strong>Which number is texted?</strong> The client's phone first, then their alt. phone, then their main contact's phone. The first mobile number found is used. Landlines and 1300/1800 numbers can't receive texts.</li>
+<li><strong>Clients marked "Do not service"</strong> don't get appointment or service-due reminders. On-my-way texts, overdue texts and one-off texts still work.</li>
+</ul>
+<p>Costs: about 5–8c per SMS (one SMS = 160 characters). Reminders are factual service messages; keep marketing out of them, and mark anyone who asks not to be texted as <strong>No SMS</strong>.</p>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 32 -->
+<section id="xero">
+<h2>32. Xero (live sync)</h2>
+<h4>What it does</h4>
+<p>CoolOps can send your sales straight into Xero, so you don't have to type invoices in twice. It works one way, from CoolOps to Xero:</p>
+<ul>
+<li>When you <strong>send</strong> an invoice (or use <strong>Mark as sent</strong>), it appears in Xero as an approved sales invoice with the same number. The job number goes in the Reference field, and every line is there with its quantity, price and GST.</li>
+<li>The client is added to Xero as a contact. If Xero already has them (same email or same name), CoolOps uses that contact instead of making a second one.</li>
+<li><strong>Payments</strong> you record go into Xero against the invoice, into the bank account you choose. If you remove a payment in CoolOps, it's deleted in Xero too.</li>
+<li><strong>Credit notes</strong> go into Xero and are applied to the invoice.</li>
+<li><strong>Voiding</strong> an invoice voids it in Xero.</li>
+</ul>
+<p>Nothing comes back from Xero into CoolOps. Keep making your changes in CoolOps.</p>
+<h4>Setting it up (one time, about 10 minutes)</h4>
+<p>You need to be an <strong>admin</strong> in CoolOps and be able to log in to your Xero organisation.</p>
+<ol type="1">
+<li><strong>Create a Xero app (this is free).</strong> Go to <strong>developer.xero.com</strong>, log in with your Xero login, and open <strong>My Apps → New app</strong>.
+<ul>
+<li>App name: <code>CoolOps</code></li>
+<li>Integration type: <strong>Web app</strong></li>
+<li>Company or application URL: your CoolOps address, e.g. <code>https://app.coolingservicemelbourne.com.au</code></li>
+<li>Redirect URI: your CoolOps address followed by <code>/api/integrations/xero/callback</code>, e.g. <code>https://app.coolingservicemelbourne.com.au/api/integrations/xero/callback</code>. (The <strong>Integrations</strong> page in CoolOps shows the exact address to copy.)</li>
+</ul></li>
+<li>In the new app, open <strong>Configuration</strong>. Copy the <strong>Client id</strong>, then click <strong>Generate a secret</strong> and copy that too.</li>
+<li><strong>Give the keys to CoolOps.</strong> In Coolify, open the CoolOps app → <strong>Environment variables</strong>, add <code>XERO_CLIENT_ID</code> (the Client id) and <code>XERO_CLIENT_SECRET</code> (the secret), and click <strong>Redeploy</strong>.</li>
+<li><strong>Connect.</strong> In CoolOps go to <strong>Integrations</strong>. The <strong>Xero (live sync)</strong> card now says <em>Not connected</em>. Click <strong>Connect to Xero</strong>, log in to Xero, and click <strong>Allow access</strong>. If you have more than one Xero organisation, choose <strong>Cooling Service Melbourne</strong> and click <strong>Use this organisation</strong>. The card then says <em>Connected to …</em>.</li>
+<li><strong>Check the settings.</strong> Click <strong>Settings</strong> on the card (or go to <strong>Settings → Xero</strong>):
+<ul>
+<li><strong>Sales account</strong>: usually <em>200 · Sales</em>.</li>
+<li><strong>Tax rate for GST lines</strong>: <em>GST on Income</em>. <strong>Tax rate for GST-free lines</strong>: <em>GST Free Income</em>.</li>
+<li><strong>Bank account for payments</strong>: choose the account your customers pay into. <strong>Payments won't go to Xero until you pick one.</strong></li>
+<li><strong>Send invoices to Xero as</strong>: <em>Approved</em> (recommended). If you choose <em>Draft</em>, you approve them in Xero yourself, and payments can't be added until you do.</li>
+<li><strong>Sync automatically</strong>: on (recommended). Turned off, nothing is sent until someone clicks <strong>Sync now</strong>.</li>
+<li>Click <strong>Save Xero settings</strong>.</li>
+</ul></li>
+</ol>
+<p>Invoices sent <em>before</em> you connected aren't copied across automatically. To send an older invoice, open it and click <strong>Push to Xero</strong> on its Xero card.</p>
+<h4>Day to day</h4>
+<p><strong>How do I know an invoice made it to Xero?</strong> Open the invoice. The <strong>Xero</strong> card on the right says <em>Synced</em>, with an <strong>Open in Xero</strong> link. Each payment and credit note shows <em>In Xero</em> next to it.</p>
+<p><strong>Something says "Xero: failed". What do I do?</strong> The red text says why, for example <em>Account code '999' is not a valid code</em> or <em>Can't reach Xero</em>.</p>
+<ul>
+<li>Connection problems fix themselves: CoolOps tries again automatically (after 1 minute, then 5 minutes, 30 minutes, 2 hours and 6 hours).</li>
+<li>For anything else, fix the cause (usually in <strong>Settings → Xero</strong>), then click <strong>Retry</strong> on the invoice.</li>
+<li>Office staff can see the Xero card and click <strong>Retry</strong>. Only admins can change the settings.</li>
+</ul>
+<p><strong>How do I see everything that was sent?</strong> Go to <strong>Settings → Xero sync log</strong>. Filter by <em>Waiting</em>, <em>Failed</em>, <em>Done</em> or <em>Cancelled</em>. Use <strong>Retry</strong> on one line, <strong>Retry all failed</strong>, or <strong>Sync now</strong> to send everything that's waiting.</p>
+<p><strong>How do I refund a client?</strong> First issue a <strong>credit note</strong> on the invoice for the amount you're refunding, then click <strong>Record payment</strong> and tick <strong>This is a refund to the client</strong>. Xero only accepts refunds against a credit note, so the refund fails without one.</p>
+<p><strong>I edited an invoice after sending it.</strong> The change is sent to Xero automatically. This stops working once Xero has a payment or credit on that invoice.</p>
+<p><strong>How do I disconnect Xero?</strong> <strong>Integrations → Xero (live sync) → Disconnect</strong>. CoolOps stops sending and gives up its access to Xero. Nothing already in Xero changes. If you reconnect the same organisation later, CoolOps carries on where it left off.</p>
+<p><strong>Does it work with MYOB?</strong> No. MYOB has no live sync. Use <strong>Integrations → Accounting export (CSV) → Download all invoices</strong> and import the file into MYOB.</p>
+<p><strong>Something to know:</strong> the daily reminder run also keeps the Xero connection alive. If nobody uses Xero sync for 60 days and the daily run isn't set up, Xero ends the connection, and you just click <strong>Connect to Xero</strong> again.</p>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 33 -->
+<section id="gcal">
+<h2>33. Google Calendar sync</h2>
+<h3>What it does</h3>
+<p>Every job you're booked on shows up in your own Google Calendar — on your phone, your watch, wherever you already look. The office keeps working in CoolOps; the calendar follows along on its own.</p>
+<p>Each event shows:</p>
+<ul>
+<li><strong>Title:</strong> <code>J-0042 · Split system service · Jane Smith</code> (a ✓ in front once the job is completed, "On hold ·" while it's on hold)</li>
+<li><strong>Where:</strong> the site address, so you can tap it for directions</li>
+<li><strong>Details:</strong> the client's phone number, the site address, access notes (gate codes, parking, pets, keys), what the job is about, who else is on it, and a link that opens the job in CoolOps</li>
+</ul>
+<p><strong>No prices, quotes or invoice amounts are ever sent to Google.</strong></p>
+<p>It's one way only: CoolOps → Google. If you move an event in Google Calendar, CoolOps does not change, and the next update from CoolOps puts the event back where the office booked it. To change a booking, ask the office (or change it in CoolOps).</p>
+<p>When a job is rescheduled, changed, handed to someone else, taken off the schedule, cancelled or deleted, your calendar updates within seconds — including taking the job off the old technician's calendar and putting it on the new one's.</p>
+<p>Each person connects their own Google account. Nobody can see anyone else's calendar.</p>
+<h3>Setup (one-off, by the admin / developer)</h3>
+<p>This is the only part that needs a computer and about ten minutes. It's free.</p>
+<ol type="1">
+<li>Go to <strong>console.cloud.google.com</strong> and sign in with the business Google account.</li>
+<li>Top left, click the project picker → <strong>New project</strong>. Name it <code>CoolOps</code> → <strong>Create</strong>.</li>
+<li>With that project selected, open <strong>APIs &amp; Services → Library</strong>, search for <strong>Google Calendar API</strong> and click <strong>Enable</strong>.</li>
+<li>Open <strong>APIs &amp; Services → OAuth consent screen</strong>. Choose <strong>External</strong>, fill in the app name (<code>CoolOps</code>), your support email and developer email, and save. Under <strong>Data access / Scopes</strong>, click <strong>Add or remove scopes</strong> and tick:
+<ul>
+<li><code>openid</code></li>
+<li><code>.../auth/userinfo.email</code></li>
+<li><code>.../auth/calendar.events</code> (Google Calendar API — "See, edit, share and permanently delete all the calendars you can access") Save. Under <strong>Audience</strong>, add each staff member's Google address as a <strong>Test user</strong> (or click <strong>Publish app</strong> so anyone in the business can connect — Google may ask for verification for published apps; test users work fine for a small team, up to 100 people).</li>
+</ul></li>
+<li>Open <strong>APIs &amp; Services → Credentials → Create credentials → OAuth client ID</strong>. Application type <strong>Web application</strong>, name <code>CoolOps</code>. Under <strong>Authorised redirect URIs</strong>, click <strong>Add URI</strong> and paste exactly: <code>https://your-coolops-address/api/integrations/google/callback</code> (the exact address is written on the CoolOps <strong>Integrations</strong> page — copy it from there). Click <strong>Create</strong>.</li>
+<li>Google shows a <strong>Client ID</strong> and a <strong>Client secret</strong>. In Coolify, open the CoolOps app → <strong>Environment variables</strong> and add:
+<ul>
+<li><code>GOOGLE_CLIENT_ID</code> = the client ID</li>
+<li><code>GOOGLE_CLIENT_SECRET</code> = the client secret Then <strong>Redeploy</strong>.</li>
+</ul></li>
+<li>In CoolOps, go to <strong>Integrations</strong>. The Google Calendar card should now say <strong>Set up</strong> instead of <strong>Not set up</strong>. Tell the team they can connect.</li>
+</ol>
+<h3>Day to day</h3>
+<h4>Connect my calendar (everyone does this once)</h4>
+<ol type="1">
+<li>Click your name / avatar, top right → <strong>My account</strong>.</li>
+<li>Find the <strong>Google Calendar</strong> card → click <strong>Connect Google Calendar</strong>.</li>
+<li>Google asks you to sign in and to allow CoolOps to manage events. Tick the calendar permission and click <strong>Continue / Allow</strong>.</li>
+<li>You land back on <strong>My account</strong> with a green line: "Google Calendar is connected." Your next 60 days of jobs are added right away.</li>
+</ol>
+<p>If the button isn't there and the card says <strong>Not set up</strong>, the admin hasn't done the setup above yet.</p>
+<h4>Check it's working</h4>
+<p><strong>My account</strong> → the Google Calendar card tells you which Google account is connected, how many upcoming jobs are in your calendar and when it last updated.</p>
+<h4>My calendar looks wrong / I deleted an event by mistake</h4>
+<p><strong>My account</strong> → <strong>Resync my calendar</strong>. This re-sends the next 60 days and puts back anything that was changed or deleted in Google.</p>
+<h4>Stop using it</h4>
+<p><strong>My account</strong> → <strong>Disconnect</strong>. Your upcoming CoolOps jobs are removed from your Google Calendar (past ones stay as a record), CoolOps stops adding new ones and the permission you gave is withdrawn at Google. You can connect again any time.</p>
+<h4>"Reconnect needed"</h4>
+<p>Google sometimes drops the permission (password change, the permission removed in your Google account, or a long gap). The card says <strong>Reconnect needed</strong> — click <strong>Reconnect Google Calendar</strong> and allow access again. Nothing is lost.</p>
+<h3>For the office / admin</h3>
+<ul>
+<li><strong>Integrations → Google Calendar</strong> lists everyone who has connected, which Google account, how many upcoming events they have, when their calendar last updated and any error. If something failed, a <strong>Retry failed</strong> button sends it again.</li>
+<li><strong>Team</strong> shows a <strong>Calendar connected</strong> badge next to each person who has connected.</li>
+<li>Jobs are only on a calendar if the person is assigned to the job and the job has a date and time. Unscheduled, cancelled and deleted jobs are never on anyone's calendar.</li>
+<li>The nightly reminders job also checks everyone's next 60 days, so even if something went wrong during the day it fixes itself overnight.</li>
+</ul>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 34 -->
+<section id="routes">
+<h2>34. Route optimisation</h2>
+<p><strong>What it does.</strong> CoolOps works out the order a technician should visit their jobs in so they spend less time driving, suggests new start times to match, and can change the bookings for you in one click (and undo it). Technicians get an "Open in Google Maps" button with all their stops in order.</p>
+<h4>Setting it up (once)</h4>
+<ol type="1">
+<li><strong>Business address.</strong> Settings → Business: make sure the address is your depot / workshop. Every route starts and ends there.</li>
+<li><strong>Start time.</strong> Settings → Routes → <em>Day starts at</em> (default 7:00 am) → Save.</li>
+<li><strong>Technicians who take the van home</strong> (optional). Team → click the person → <em>Route start</em> → pencil icon → switch on <em>Start from home</em>, type their home address (e.g. <code>12 Smith St, Box Hill VIC 3128</code>) → Save.</li>
+<li><strong>Real drive times (optional, recommended).</strong> Without this CoolOps <em>estimates</em> driving from straight-line distances and only knows addresses to the suburb. To use Google Maps:
+<ul>
+<li>Go to <strong>console.cloud.google.com</strong>, sign in, create a project (e.g. "CoolOps").</li>
+<li><em>Billing</em>: add a card (Google requires it; normal use for a small business stays within Google's monthly free usage).</li>
+<li><em>APIs &amp; Services → Library</em>: enable <strong>Geocoding API</strong>, <strong>Routes API</strong> and <strong>Maps Static API</strong>.</li>
+<li><em>APIs &amp; Services → Credentials → Create credentials → API key</em>. Click the key, under <em>API restrictions</em> choose those three APIs, Save.</li>
+<li>Give the key to whoever runs the server to add as <code>GOOGLE_MAPS_API_KEY</code> (in Coolify: the app's Environment Variables) and redeploy.</li>
+<li>Then Integrations → Route optimisation → <strong>Geocode missing addresses</strong>. The card should now say <em>Using Google Maps</em>.</li>
+</ul></li>
+</ol>
+<h4>Day to day</h4>
+<ul>
+<li><strong>Plan a technician's day:</strong> Schedule → (switch to <em>Day</em> and go to the day you want) → <strong>Plan route</strong> → pick the technician (and day) → <strong>Plan route</strong>.</li>
+<li><strong>Read the plan:</strong> the top shows <em>Driving now</em>, <em>Driving with the plan</em> and the <em>Saving</em>. The map shows the stops numbered in the new order (the dashed line is the current order). The table lists each job with its current time and the proposed time (changed times are highlighted).</li>
+<li><strong>Accept it:</strong> <strong>Apply new times</strong> → confirm. The Schedule board, the job timelines and the technician's Google Calendar update, and the technician gets a notification.</li>
+<li><strong>Changed your mind:</strong> on the same page click <strong>Undo</strong> next to "Route plan applied…". Jobs go back to their old times (any job moved by hand since is left as it is).</li>
+<li><strong>Stop a job being moved:</strong> open the job → Edit → switch on <strong>Time fixed</strong> (e.g. "customer only home 1–2 pm"). Emergencies, jobs already started and jobs shared by two technicians are never moved either.</li>
+<li><strong>Send the technician their route:</strong> they don't need anything: on <strong>My jobs</strong> they tap <strong>Open today's route in Google Maps</strong> (or the button for an upcoming day). You can also copy the <strong>Open in Google Maps</strong> link from the plan page.</li>
+<li><strong>A job says "no map location":</strong> check the site address on the client's page (street, suburb, postcode), save it, then Integrations → <strong>Geocode missing addresses</strong>.</li>
+</ul>
+<a class="top" href="#top">Back to top ↑</a>
+</section>
+
+<!-- 35 -->
 <section id="local">
-<h2>30. Try it on your own computer</h2>
+<h2>35. Try it on your own computer</h2>
 <p>Optional. Useful for testing changes before they go live.</p>
 <ol>
   <li>Install <strong>Node.js 20 or newer</strong> from <a href="https://nodejs.org">nodejs.org</a> (the LTS version).</li>
@@ -750,7 +999,7 @@ pnpm dev                    # starts the app</code></pre>
 
 <!-- 31 -->
 <section id="update">
-<h2>31. Updating the app</h2>
+<h2>36. Updating the app</h2>
 <ol>
   <li>Get the new code into your GitHub repository (commit and push, or GitHub Desktop → <span class="ui">Push origin</span>).</li>
   <li>In Coolify open the app and click <span class="ui">Redeploy</span>. Or turn on <span class="ui">Auto Deploy</span> so every push to <code>main</code> deploys by itself.</li>
@@ -762,7 +1011,7 @@ pnpm dev                    # starts the app</code></pre>
 
 <!-- 32 -->
 <section id="backup">
-<h2>32. Backups and restoring</h2>
+<h2>37. Backups and restoring</h2>
 <h3>Database (most important)</h3>
 <ol>
   <li>Open the PostgreSQL database in Coolify and go to <span class="ui">Backups</span>.</li>
@@ -779,7 +1028,7 @@ pnpm dev                    # starts the app</code></pre>
 
 <!-- 33 -->
 <section id="trouble">
-<h2>33. Troubleshooting</h2>
+<h2>38. Troubleshooting</h2>
 <div class="table-wrap"><table>
 <tr><th>Problem</th><th>What to check</th></tr>
 <tr><td>Can't log in at all after deploying</td><td>Did you run <code>pnpm db:seed</code> once (section 8)? Is <code>AUTH_SECRET</code> set? Do <code>AUTH_URL</code> and <code>APP_URL</code> match the address in your browser exactly, including <code>https://</code>?</td></tr>
@@ -800,7 +1049,7 @@ pnpm dev                    # starts the app</code></pre>
 
 <!-- 34 -->
 <section id="faq">
-<h2>34. Questions and answers</h2>
+<h2>39. Questions and answers</h2>
 <h4>Do I need Docker?</h4>
 <p>No. Coolify builds and runs the container for you. There are no Docker files in the code on purpose.</p>
 <h4>Can clients log in?</h4>
@@ -816,13 +1065,13 @@ pnpm dev                    # starts the app</code></pre>
 <h4>How many users can I have?</h4>
 <p>As many as you like. There is no per-user cost.</p>
 <h4>Is my data safe?</h4>
-<p>Passwords are stored encrypted (hashed), every page checks the person's role, the site runs over HTTPS, and every change is recorded in the audit log. Keep daily off-server backups (section 32).</p>
+<p>Passwords are stored encrypted (hashed), every page checks the person's role, the site runs over HTTPS, and every change is recorded in the audit log. Keep daily off-server backups (section 37).</p>
 <a class="top" href="#top">Back to top ↑</a>
 </section>
 
 <!-- 35 -->
 <section id="glossary">
-<h2>35. Glossary</h2>
+<h2>40. Glossary</h2>
 <div class="table-wrap"><table>
 <tr><th>Word</th><th>Meaning</th></tr>
 <tr><td>GST</td><td>Goods and Services Tax, 10% in Australia. "Ex GST" means before GST, "inc GST" means including it.</td></tr>
@@ -846,20 +1095,18 @@ pnpm dev                    # starts the app</code></pre>
 
 <!-- 36 -->
 <section id="later">
-<h2>36. Not built yet</h2>
-<p>The database is ready for these, and the <span class="ui">Integrations</span> page lists them, but they do not work yet:</p>
+<h2>41. What's included and what's left out</h2>
+<p>Everything in the original plan is now built. The add-ons in sections 30 to 34 (inventory, SMS, Xero, Google Calendar, route optimisation) switch on when you add their keys; until then they stay quietly off.</p>
 <ul>
-  <li><strong>SMS</strong> (Twilio or MessageMedia): "on my way" and reminder texts.</li>
-  <li><strong>Xero / MYOB live sync</strong> (the Xero CSV export does work).</li>
-  <li><strong>Inventory and van stock</strong>.</li>
-  <li><strong>Google Calendar sync</strong> for technicians.</li>
+  <li><strong>Left out on purpose:</strong> online card payments (you record every payment yourself) and a client portal or client logins (clients only get a private link to each quote or invoice).</li>
+  <li><strong>MYOB:</strong> there is no live MYOB sync. Use <span class="ui">Integrations → Accounting export (CSV)</span> and import the file into MYOB.</li>
 </ul>
 <a class="top" href="#top">Back to top ↑</a>
 </section>
 
 <!-- 37 -->
 <section id="dev">
-<h2>37. For developers</h2>
+<h2>42. For developers</h2>
 <p><strong>Stack:</strong> Next.js 15 (App Router, TypeScript strict), PostgreSQL + Prisma 6, Auth.js v5, Tailwind v4 + shadcn/ui, TanStack Table, FullCalendar, dnd-kit, Recharts, React PDF, Resend + React Email, Vitest. Money is integer cents; GST logic in <code>src/lib/money.ts</code>; Melbourne time helpers in <code>src/lib/dates.ts</code>.</p>
 <div class="table-wrap"><table>
 <tr><th>Command</th><th>What it does</th></tr>

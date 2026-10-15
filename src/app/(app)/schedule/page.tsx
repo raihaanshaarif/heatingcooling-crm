@@ -27,6 +27,7 @@ export default async function SchedulePage() {
         clients={clients}
         unscheduled={unscheduled}
         canEdit={canEdit}
+        canPlanRoutes={can(user, "update", "routes")}
       />
     </>
   );

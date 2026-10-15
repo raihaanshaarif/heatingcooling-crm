@@ -16,6 +16,7 @@ import {
 import { NotFoundError, UserError, idSchema, runAction } from "@/server/action";
 import { audit, diff, logActivity } from "@/server/audit";
 import { createLeadRecord } from "./service";
+import { geocodePropertyIfMissing, kickGeocode } from "@/server/routes/geocode";
 
 function revalidateLead(id?: string) {
   revalidatePath("/leads");
@@ -332,6 +333,10 @@ export async function convertLead(input: z.input<typeof convertLeadSchema>) {
         });
         return { clientId, propertyId, jobId };
       });
+      if (result.propertyId) {
+        const propertyId = result.propertyId;
+        kickGeocode(() => geocodePropertyIfMissing(propertyId));
+      }
       revalidateLead(d.id);
       revalidatePath("/clients");
       const redirectTo =

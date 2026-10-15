@@ -15,7 +15,9 @@ import type {
   EventSourceFuncArg,
 } from "@fullcalendar/core";
 import type { EventReceiveArg, EventResizeDoneArg } from "@fullcalendar/interaction";
-import { GripVertical } from "lucide-react";
+import { GripVertical, Lock, Route } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { RoutePicker } from "@/components/routes/route-picker";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,17 +57,20 @@ export function ScheduleBoard({
   clients,
   unscheduled,
   canEdit,
+  canPlanRoutes = false,
 }: {
   technicians: TechnicianOption[];
   clients: ClientOption[];
   unscheduled: UnscheduledJob[];
   canEdit: boolean;
+  canPlanRoutes?: boolean;
 }) {
   const router = useRouter();
   const calendar = useRef<FullCalendar>(null);
   const sidebar = useRef<HTMLDivElement>(null);
   const [hidden, setHidden] = useState<string[]>([]);
   const [slot, setSlot] = useState<{ start: Date; end: Date } | null>(null);
+  const [routeDay, setRouteDay] = useState<string | null>(null);
   const hiddenRef = useRef(hidden);
   hiddenRef.current = hidden;
 
@@ -142,6 +147,23 @@ export function ScheduleBoard({
       <Card className="min-w-0 py-4">
         <CardContent className="space-y-3 px-3 sm:px-4">
           <div className="flex flex-wrap items-center gap-2">
+            {canPlanRoutes && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="order-last ml-auto"
+                onClick={() => {
+                  // The calendar holds Melbourne wall-clock dates in "UTC": its date is the day shown.
+                  const shown = calendar.current?.getApi().getDate();
+                  setRouteDay(
+                    shown ? shown.toISOString().slice(0, 10) : toWall(new Date()).slice(0, 10),
+                  );
+                }}
+              >
+                <Route /> Plan route
+              </Button>
+            )}
             <span className="text-muted-foreground text-sm">Show:</span>
             {[...technicians, { value: "unassigned", label: "Unassigned", color: UNASSIGNED }].map(
               (t) => {
@@ -233,6 +255,9 @@ export function ScheduleBoard({
                   <div className="h-full overflow-hidden px-1 py-0.5 text-[11px] leading-tight text-white">
                     <p className="font-semibold">
                       {arg.timeText} · {e.number}
+                      {e.timeFixed && (
+                        <Lock className="ml-1 inline size-2.5" aria-label="Time fixed" />
+                      )}
                     </p>
                     <p className="truncate">
                       {e.clientName}
@@ -295,6 +320,23 @@ export function ScheduleBoard({
           </div>
         </CardContent>
       </Card>
+      <FormDialog
+        open={routeDay !== null}
+        onOpenChange={(o) => !o && setRouteDay(null)}
+        title="Plan route"
+        description="Put a technician's jobs for the day in the order with the least driving."
+      >
+        {(close) =>
+          routeDay && (
+            <RoutePicker
+              technicians={technicians}
+              technicianId={technicians.find((t) => !hidden.includes(t.value))?.value}
+              day={routeDay}
+              onDone={close}
+            />
+          )
+        }
+      </FormDialog>
       <FormDialog
         open={slot !== null}
         onOpenChange={(o) => !o && setSlot(null)}

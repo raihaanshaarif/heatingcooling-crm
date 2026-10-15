@@ -12,6 +12,7 @@ import {
   emailTemplatesSchema,
   invoicingSettingsSchema,
   numberingSettingsSchema,
+  routeSettingsSchema,
   smsSettingsSchema,
 } from "@/lib/validations/settings";
 import {
@@ -24,6 +25,7 @@ import {
 } from "@/server/action";
 import { audit, diff } from "@/server/audit";
 import { getSettings } from "@/server/settings";
+import { geocodeDepot, kickGeocode } from "@/server/routes/geocode";
 
 function revalidateSettings() {
   revalidatePath("/", "layout");
@@ -49,7 +51,24 @@ export async function saveBusinessSettings(input: z.input<typeof businessSetting
   return runAction(
     { schema: businessSettingsSchema, permission: ["update", "settings"] },
     input,
-    (d, user) => updateSettings("business", d, user.id),
+    async (d, user) => {
+      const before = await getSettings();
+      await updateSettings("business", d, user.id);
+      // The business address is the depot every route starts from: locate it again.
+      const moved = (["addressLine1", "addressLine2", "suburb", "state", "postcode"] as const).some(
+        (k) => (before[k] ?? null) !== (d[k] ?? null),
+      );
+      if (moved || before.depotLat === null) kickGeocode(geocodeDepot);
+      return null;
+    },
+  );
+}
+
+export async function saveRouteSettings(input: z.input<typeof routeSettingsSchema>) {
+  return runAction(
+    { schema: routeSettingsSchema, permission: ["update", "settings"] },
+    input,
+    (d, user) => updateSettings("routes", d, user.id),
   );
 }
 

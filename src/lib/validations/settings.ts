@@ -25,6 +25,14 @@ export const businessSettingsSchema = z.object({
 });
 export type BusinessSettingsInput = z.input<typeof businessSettingsSchema>;
 
+export const routeSettingsSchema = z.object({
+  routeDayStart: z
+    .string()
+    .trim()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use a time like 07:00"),
+});
+export type RouteSettingsInput = z.input<typeof routeSettingsSchema>;
+
 export const invoicingSettingsSchema = z.object({
   gstRegistered: z.boolean(),
   defaultPaymentTerms: z.nativeEnum(PaymentTerms),

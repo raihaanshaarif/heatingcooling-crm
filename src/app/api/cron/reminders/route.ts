@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { runDailyReminders } from "@/server/cron/reminders";
 import { runCalendarCron } from "@/server/google-calendar/sync";
 import { runXeroCron } from "@/server/xero/sync";
+import { runGeocodeCron } from "@/server/routes/geocode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,7 +24,8 @@ function authorised(req: Request) {
  * Safe to run more than once a day: every reminder is de-duplicated.
  * Then pushes waiting Xero sync jobs (when connected with automatic sync on) and refreshes
  * the Xero connection so it never lapses, then checks every connected Google Calendar for the
- * next 60 days (only changed events are sent) and retries waiting calendar updates.
+ * next 60 days (only changed events are sent) and retries waiting calendar updates, and
+ * finally locates site addresses that aren't on the map yet (route planning).
  */
 export async function GET(req: Request) {
   if (!authorised(req)) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
@@ -43,7 +45,14 @@ export async function GET(req: Request) {
     console.error("[cron] google calendar sync failed", error);
     googleCalendar = { error: error instanceof Error ? error.message : String(error) };
   }
-  return NextResponse.json({ ok: true, ...summary, xero, googleCalendar });
+  let geocoding: unknown;
+  try {
+    geocoding = await runGeocodeCron();
+  } catch (error) {
+    console.error("[cron] geocoding failed", error);
+    geocoding = { error: error instanceof Error ? error.message : String(error) };
+  }
+  return NextResponse.json({ ok: true, ...summary, xero, googleCalendar, geocoding });
 }
 
 export const POST = GET;

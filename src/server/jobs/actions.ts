@@ -48,7 +48,7 @@ import {
   type StockNote,
 } from "@/server/inventory/service";
 import { kickCalendarSync, queueJobCalendarSync } from "@/server/google-calendar/queue";
-import { applyChecklist, loadJobFor } from "./service";
+import { applyChecklist, loadJobFor, rescheduleJobInTx } from "./service";
 
 function revalidateJob(id?: string) {
   revalidatePath("/jobs");
@@ -117,6 +117,7 @@ export async function createJob(input: z.input<typeof jobSchema>) {
               d.estimatedMinutes ??
               (d.scheduledStart && end ? minutesBetween(d.scheduledStart, end) : null),
             status: scheduled ? "SCHEDULED" : "UNSCHEDULED",
+            timeFixed: d.timeFixed,
           },
         });
         await syncAssignments(tx, created.id, d.assigneeIds);
@@ -175,6 +176,7 @@ export async function updateJob(id: string, input: z.input<typeof jobSchema>) {
           scheduledStart: d.scheduledStart,
           scheduledEnd: d.scheduledEnd,
           estimatedMinutes: d.estimatedMinutes,
+          timeFixed: d.timeFixed,
           status:
             before.status === "UNSCHEDULED" && d.scheduledStart
               ? ("SCHEDULED" as const)
@@ -403,48 +405,9 @@ export async function rescheduleJob(input: z.input<typeof rescheduleSchema>) {
     { schema: rescheduleSchema, permission: ["update", "schedule"] },
     input,
     async ({ id, start, end, technicianId }, user) => {
-      await db.$transaction(async (tx) => {
-        const job = await tx.job.findFirst({ where: { id, deletedAt: null } });
-        if (!job) throw new NotFoundError("Job");
-        if (["COMPLETED", "INVOICED", "CANCELLED"].includes(job.status))
-          throw new UserError("Completed or cancelled jobs can't be moved.");
-        await tx.job.update({
-          where: { id },
-          data: {
-            scheduledStart: start,
-            scheduledEnd: end,
-            estimatedMinutes: minutesBetween(start, end),
-            status: job.status === "UNSCHEDULED" ? "SCHEDULED" : job.status,
-          },
-        });
-        if (technicianId) {
-          const exists = await tx.jobAssignment.findUnique({
-            where: { jobId_userId: { jobId: id, userId: technicianId } },
-          });
-          if (!exists) {
-            await tx.jobAssignment.deleteMany({ where: { jobId: id } });
-            await tx.jobAssignment.create({ data: { jobId: id, userId: technicianId } });
-          }
-        }
-        await queueJobCalendarSync(tx, id);
-        await logActivity(tx, {
-          entityType: "JOB",
-          entityId: id,
-          type: "SYSTEM",
-          body: `Rescheduled to ${formatDateTime(start)}`,
-          userId: user.id,
-        });
-        await audit(tx, {
-          userId: user.id,
-          action: "RESCHEDULE",
-          entityType: "JOB",
-          entityId: id,
-          changes: {
-            scheduledStart: { from: job.scheduledStart, to: start },
-            scheduledEnd: { from: job.scheduledEnd, to: end },
-          },
-        });
-      });
+      await db.$transaction((tx) =>
+        rescheduleJobInTx(tx, user.id, { id, start, end, technicianId }),
+      );
       kickCalendarSync();
       revalidateJob(id);
       return { id };
@@ -958,6 +921,7 @@ export async function getScheduleEvents(input: { start: string; end: string }) {
         title: j.title,
         status: j.status,
         priority: j.priority,
+        timeFixed: j.timeFixed,
         clientName: j.client.name,
         suburb: j.property?.suburb ?? null,
         start: j.scheduledStart!.toISOString(),

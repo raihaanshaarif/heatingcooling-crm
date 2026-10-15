@@ -27,6 +27,7 @@ export type Resource =
   | "notifications"
   | "sms"
   | "xero"
+  | "routes"
   | "prices";
 
 export interface PermissionUser {
@@ -71,6 +72,7 @@ export const PERMISSIONS: Matrix = {
     notifications: ALL,
     sms: ALL,
     xero: ALL,
+    routes: ALL,
     prices: ALL,
   },
   OFFICE: {
@@ -93,12 +95,14 @@ export const PERMISSIONS: Matrix = {
     notifications: ALL,
     sms: ["view", "create"], // send one-off texts and see them on timelines; SMS settings/log are admin
     xero: ["view", "update"], // see an invoice's Xero sync status and click Retry; connect/settings are admin
+    routes: ["view", "update"], // plan and apply technicians' routes; set where a technician starts
     prices: READ,
   },
   TECHNICIAN: {
     myJobs: ["view", "update"],
     jobs: ["view", "update"], // own jobs only — see canAccessJob
     equipment: READ, // only on their jobs
+    routes: READ, // their own day's "Open in Google Maps" link on My jobs
     notifications: ALL,
   },
 };

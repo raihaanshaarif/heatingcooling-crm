@@ -30,6 +30,8 @@ export const jobSchema = z
     scheduledStart: optionalDateTime,
     scheduledEnd: optionalDateTime,
     estimatedMinutes: optionalInt("Estimated minutes"),
+    /** Customer-agreed time: route planning never moves the job. */
+    timeFixed: z.boolean().default(false),
     assigneeIds: idList,
     equipmentIds: idList,
     applyChecklist: z.boolean().default(true),

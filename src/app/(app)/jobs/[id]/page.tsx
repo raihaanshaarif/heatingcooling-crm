@@ -76,6 +76,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
           <>
             <JobStatusBadge status={job.status} />
             <PriorityBadge priority={job.priority} />
+            {job.timeFixed && <Badge variant="muted">Time fixed</Badge>}
           </>
         }
         description={job.title}

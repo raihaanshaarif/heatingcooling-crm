@@ -31,14 +31,14 @@ Technicians land on **My Jobs**, a phone-first view with big _On my way / Start 
 
 ## Scripts
 
-| Command                                                                | What it does                                                                                                             |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `pnpm dev` / `build` / `start`                                         | Next.js                                                                                                                  |
-| `pnpm lint`                                                            | ESLint, zero warnings allowed                                                                                            |
-| `pnpm typecheck`                                                       | `tsc --noEmit`                                                                                                           |
-| `pnpm test`                                                            | Vitest: money/GST, numbering, permissions, invoice status, dates, rate limiting, lead validation, stock logic, SMS, Xero |
-| `pnpm format`                                                          | Prettier                                                                                                                 |
-| `pnpm db:migrate` / `db:deploy` / `db:seed` / `db:reset` / `db:studio` | Prisma                                                                                                                   |
+| Command                                                                | What it does                                                                                                                                                  |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev` / `build` / `start`                                         | Next.js                                                                                                                                                       |
+| `pnpm lint`                                                            | ESLint, zero warnings allowed                                                                                                                                 |
+| `pnpm typecheck`                                                       | `tsc --noEmit`                                                                                                                                                |
+| `pnpm test`                                                            | Vitest: money/GST, numbering, permissions, invoice status, dates, rate limiting, lead validation, stock logic, SMS, Xero, Google Calendar, route optimisation |
+| `pnpm format`                                                          | Prettier                                                                                                                                                      |
+| `pnpm db:migrate` / `db:deploy` / `db:seed` / `db:reset` / `db:studio` | Prisma                                                                                                                                                        |
 
 ## Website enquiry form → leads
 
@@ -147,6 +147,26 @@ One-way sync **CoolOps → Xero** over the Xero Accounting API (OAuth 2.0). Noth
 
 The real Xero API was not called during development (no Xero app or organisation). Payload building, OAuth requests, token encryption and the retry rules are unit-tested; the full flow (connect, contacts, invoices, voids, credit notes with allocation, payments, payment deletion, 429 handling, validation errors) was clicked through in the browser against a local mock of the Xero endpoints. Try it against the Xero Demo Company before going live.
 
+## Route optimisation
+
+Plan each technician's day so they drive less: **Schedule → Plan route** (office and admin).
+
+- **Where everything is.** Every site (`Property`) has a latitude/longitude. New and edited addresses are located in the background after saving (Next.js `after()`, never blocking the form); the daily cron and the admin button **Geocode missing addresses** (Integrations card, or **Settings → Routes**) catch up on anything missing. With `GOOGLE_MAPS_API_KEY` the Google Geocoding API is used (`region=au`, `components=country:AU`); if Google can't find the street, or without a key, the address is placed at the centre of its suburb from a built-in list of ~100 Melbourne suburbs (marked _approximate_). How each address was located is stored (`geocodeSource`: Google / suburb centre / demo).
+- **Start and end point.** The business address (**Settings → Business**) is the depot, located the same way whenever it changes. A technician who takes the van home can **Start from home** (Team → the person → _Route start_, office or admin). **Settings → Routes**: the time technicians leave (default 07:00).
+- **The plan.** Pick a technician and a day (the button uses the day shown in Day view). Their jobs that day are ordered for the least driving plus idle waiting, starting at the day start time, adding each job's booked length (else its estimate, else 2 h) and the drive between stops, rounding start times up to 5 minutes. Jobs that are **Emergency**, marked **Time fixed** (new switch in the job form, shown as a badge and a lock on the Schedule board), already under way / completed / on hold, or shared with another technician keep their time; the rest are re-sequenced around them. A fixed job that can't be reached in time is flagged. Up to 8 stops every order is checked (exact branch-and-bound search); above that nearest neighbour plus 2-opt / relocate improvement. The plan is never worse than the booked order.
+- **Drive times.** With the key: Google Routes API `computeRouteMatrix` (traffic-aware at the departure time when the day is still ahead; one request per plan, up to 25 places). Without a key, or if Google fails: straight-line distance × 1.3 at 40 km/h, and the page says clearly that it's an estimate.
+- **The page** shows driving now vs with the plan (minutes, km) and the saving, a map with numbered stops and the route (Google Static Maps image fetched through `/api/routes/static-map` so the key stays on the server; without a key a plain SVG plot scaled from the coordinates, no outside map tiles), and each stop's current vs proposed time and drive.
+- **Apply new times** moves every changed job in one transaction through the same reschedule logic as drag-and-drop on the Schedule board (job timeline entry, audit log, Google Calendar update), notifies the technician, and stores the old times in `RoutePlan`. **Undo** puts them back (jobs moved again since are left alone). The apply is refused if a job moved after the plan was made.
+- **Open in Google Maps**: a normal Google Maps directions link with the stops in order as waypoints, from and back to the depot / home (no API key needed; split into several links after 9 waypoints). Technicians see it on **My jobs** for today (from the depot before the day starts, else from where the phone is) and for their next few working days. Technicians can't open the planner.
+- Code: `src/lib/routes` (haversine and estimates, solver, day planning, Google request building / parsing, Maps URLs, suburb centres; all unit-tested, Google with a mocked `fetch`), `src/server/routes` (geocoding, planning, actions, queries), `src/app/(app)/schedule/route`.
+
+| Variable                                                                | What                                                                                                                                                                                                                                                    |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GOOGLE_MAPS_API_KEY`                                                   | A server API key from console.cloud.google.com with the **Geocoding API**, **Routes API** and **Maps Static API** enabled (restrict the key to those APIs). Empty: no Google calls at all; suburb-centre locations and straight-line estimates instead. |
+| `GOOGLE_GEOCODING_URL` / `GOOGLE_ROUTES_URL` / `GOOGLE_STATIC_MAPS_URL` | Testing only: point the calls at a mock server.                                                                                                                                                                                                         |
+
+The demo seed gives every site real Melbourne suburb coordinates (nudged per street), the depot in Braeside, and books Jack Wilson's next free weekday as a criss-cross of six jobs (one _Time fixed_ at 1 pm), so the planner works out of the box without a key. The Google APIs were **not** called during development (no key in the sandbox): request building and response parsing are unit-tested with a mocked `fetch`; everything else was clicked through in the browser in estimate mode.
+
 ## How the money works
 
 - All amounts are integer cents. GST is 10%, applied per line (each line can be GST-free) and calculated once on the taxable subtotal so rounding never drifts. Logic lives in `src/lib/money.ts` with tests.
@@ -164,7 +184,8 @@ The real Xero API was not called during development (no Xero app or organisation
 4. expires quotes past their valid-until date,
 5. texts (SMS) clients with a job scheduled tomorrow, clients whose plan is due within 14 days, and, if switched on, overdue invoices (see SMS texts below),
 6. refreshes the Xero connection and, with automatic sync on, sends anything still waiting to Xero (see Xero above),
-7. checks everyone's connected Google Calendar for the next 60 days and retries waiting calendar updates (see Google Calendar below).
+7. checks everyone's connected Google Calendar for the next 60 days and retries waiting calendar updates (see Google Calendar below),
+8. locates site addresses that aren't on the map yet, for route planning (see Route optimisation below).
 
 Every reminder is de-duplicated, so running it twice does nothing extra. On Coolify it runs as a scheduled task (see Deploy below); `pnpm cron:reminders` calls the endpoint from inside the app container.
 
@@ -184,6 +205,7 @@ Coolify builds and runs the container itself with Nixpacks, so the repo has no D
    - `LEAD_WEBHOOK_SECRET` and `CRON_SECRET`: long random strings.
    - Optional SMS: `SMS_PROVIDER` plus the provider's keys and `SMS_FROM` (see SMS texts above).
    - Optional Xero: `XERO_CLIENT_ID` and `XERO_CLIENT_SECRET` (see Xero above), then **Integrations → Connect to Xero**.
+   - Optional Google Maps: `GOOGLE_MAPS_API_KEY` for real drive times in route planning (see Route optimisation below).
    - Optional Google Calendar: `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (see Google Calendar below); each person then connects from **My account**.
    - `TZ=Australia/Melbourne` is optional; the app always uses Melbourne time anyway.
 4. **File uploads** (job photos, signatures, logo). Easiest: keep `STORAGE_DRIVER=local`, set `STORAGE_LOCAL_DIR=/app/uploads`, and in the app's _Storages_ tab add a persistent volume mounted at `/app/uploads` so files survive redeploys. Or use `STORAGE_DRIVER=s3` with Cloudflare R2 / S3.

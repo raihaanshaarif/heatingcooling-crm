@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Pencil, Plus } from "lucide-react";
+import { Home, Pencil, Plus } from "lucide-react";
 import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/permissions";
 import { formatCents } from "@/lib/money";
@@ -18,6 +18,8 @@ import { JobsMiniTable } from "@/components/shared/record-tables";
 import { UserForm } from "@/components/team/user-form";
 import { LicenceForm } from "@/components/team/licence-form";
 import { DeleteLicenceButton } from "@/components/team/delete-licence-button";
+import { RouteStartForm } from "@/components/routes/route-start-form";
+import { getSettings } from "@/server/settings";
 
 export const metadata: Metadata = { title: "Team member" };
 
@@ -27,6 +29,8 @@ export default async function TeamMemberPage({ params }: { params: Promise<{ id:
   const member = await getTeamMember(id);
   if (!member) notFound();
   const canManage = can(user, "update", "users");
+  const settings = await getSettings();
+  const worksJobs = member.role !== "OFFICE";
   return (
     <>
       <PageHeader
@@ -108,25 +112,73 @@ export default async function TeamMemberPage({ params }: { params: Promise<{ id:
             </CardContent>
           </Card>
         </div>
-        <Card className="h-fit">
-          <CardHeader>
-            <CardTitle>Details</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <DetailList
-              items={[
-                { label: "Email", value: member.email },
-                { label: "Phone", value: formatPhoneAU(member.phone) },
-                {
-                  label: "Hourly cost",
-                  value: formatCents(member.hourlyCostCents),
-                  hidden: !can(user, "view", "priceBookCosts"),
-                },
-                { label: "Since", value: formatDate(member.createdAt) },
-              ]}
-            />
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <Card className="h-fit">
+            <CardHeader>
+              <CardTitle>Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DetailList
+                items={[
+                  { label: "Email", value: member.email },
+                  { label: "Phone", value: formatPhoneAU(member.phone) },
+                  {
+                    label: "Hourly cost",
+                    value: formatCents(member.hourlyCostCents),
+                    hidden: !can(user, "view", "priceBookCosts"),
+                  },
+                  { label: "Since", value: formatDate(member.createdAt) },
+                ]}
+              />
+            </CardContent>
+          </Card>
+          {worksJobs && (
+            <Card className="h-fit" data-testid="route-start">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Route start</CardTitle>
+                {can(user, "update", "routes") && (
+                  <FormDialogButton
+                    label=""
+                    icon={<Pencil />}
+                    title="Route start"
+                    description="Where route planning starts and ends this person's day."
+                    size="icon"
+                    variant="ghost"
+                  >
+                    <RouteStartForm user={member} />
+                  </FormDialogButton>
+                )}
+              </CardHeader>
+              <CardContent className="text-sm">
+                {member.routeFromHome && member.homeAddress ? (
+                  <p className="flex items-start gap-2">
+                    <Home className="mt-0.5 size-4 shrink-0" />
+                    <span>
+                      Home: {member.homeAddress}
+                      {member.homeLat === null && (
+                        <span className="text-muted-foreground block text-xs">
+                          Not on the map yet: the depot is used until it is.
+                        </span>
+                      )}
+                      {member.homeGeocodeSource === "SUBURB" && (
+                        <span className="text-muted-foreground block text-xs">
+                          Placed at the suburb centre (approximate).
+                        </span>
+                      )}
+                    </span>
+                  </p>
+                ) : (
+                  <p>
+                    Depot
+                    {settings.addressLine1
+                      ? `: ${settings.addressLine1}${settings.suburb ? `, ${settings.suburb}` : ""}`
+                      : " (add the business address under Settings → Business)"}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
     </>
   );

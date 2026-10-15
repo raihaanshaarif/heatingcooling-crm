@@ -8,6 +8,7 @@ import {
   MessageSquare,
   Package,
   RefreshCw,
+  Route,
 } from "lucide-react";
 import { requirePermission } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -30,6 +31,9 @@ import { getXeroOverview } from "@/server/xero/queries";
 import { getCalendarOverview } from "@/server/google-calendar/queries";
 import { RetryFailedCalendarButton } from "@/components/google-calendar/calendar-actions";
 import { CalendarBadge } from "@/components/google-calendar/calendar-badge";
+import { getRouteOverview } from "@/server/routes/queries";
+import { RouteOverviewText } from "@/components/routes/route-overview";
+import { GeocodeMissingButton } from "@/components/routes/route-settings";
 
 export const metadata: Metadata = { title: "Integrations" };
 
@@ -64,6 +68,7 @@ export default async function IntegrationsPage({
           }
         : null;
   const inventoryTracked = await db.inventoryItem.count({ where: { active: true } });
+  const routes = await getRouteOverview();
   const sms = getSmsConfig();
   const smsLast30 = await db.smsMessage.count({
     where: {
@@ -295,6 +300,46 @@ export default async function IntegrationsPage({
               )}
             </>
           )}
+        </span>
+      ),
+    },
+    {
+      icon: Route,
+      title: "Route optimisation",
+      status: routes.googleConfigured ? (
+        <Badge variant="success">Using Google Maps</Badge>
+      ) : (
+        <Badge variant="warning">Estimating</Badge>
+      ),
+      body: (
+        <span data-testid="routes-card">
+          <strong className="text-foreground">
+            {routes.googleConfigured
+              ? "Using Google Maps"
+              : "Estimating with straight-line distances (add GOOGLE_MAPS_API_KEY for real drive times)"}
+          </strong>
+          . Plan each technician&apos;s day from <strong>Schedule → Plan route</strong>: best
+          visiting order, new times and the driving saved, plus an <em>Open in Google Maps</em> link
+          for the technician (on their My jobs).{" "}
+          {!routes.googleConfigured && (
+            <>
+              To set up: in <strong>console.cloud.google.com</strong> enable the{" "}
+              <em>Geocoding API</em>, <em>Routes API</em> and <em>Maps Static API</em> (billing must
+              be on; normal use stays within Google&apos;s monthly free usage), create an{" "}
+              <em>API key</em>, restrict it to those three APIs, and put it in{" "}
+              <code className="bg-muted rounded px-1">GOOGLE_MAPS_API_KEY</code>. Redeploy, then
+              click Geocode missing addresses.{" "}
+            </>
+          )}
+          <span className="mt-2 block">
+            <RouteOverviewText overview={routes} />
+          </span>
+          <span className="mt-2 flex flex-wrap gap-2">
+            <GeocodeMissingButton />
+            <Button asChild size="sm" variant="ghost">
+              <Link href="/settings?tab=routes">Route settings</Link>
+            </Button>
+          </span>
         </span>
       ),
     },
