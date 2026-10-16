@@ -66,6 +66,7 @@ curl -X POST http://localhost:3000/api/leads/webhook \
 ```
 
 - `name` and one of `email` / `phone` are required. Everything else is optional.
+- Use the same payload contract for every website enquiry form (contact, quote request, call-back, service booking) so all enquiries land in Leads consistently.
 - `utm_*` and `gclid` are stored, and a `gclid` (or `utm_source=google` with `cpc`) marks the lead source as _Google Ads_ so the Lead sources report shows ad ROI.
 - **Several websites?** Point every site's form at the same URL with the same key and send `site` with that website's name. The lead shows which site it came from on the Leads board and table. If `site` is left out and the form posts from the browser, the site's domain is taken from the request automatically.
 - Leave a hidden `website` field empty in your form: bots fill it in and are silently ignored.

@@ -86,8 +86,10 @@ export default async function IntegrationsPage({
         <>
           POST enquiries to <code className="bg-muted rounded px-1">{webhookUrl}</code> with header{" "}
           <code className="bg-muted rounded px-1">x-api-key: LEAD_WEBHOOK_SECRET</code>. Leads
-          appear instantly, duplicates within 24 hours are merged, and the office is notified. See
-          the README for a curl example.
+          appear instantly, duplicates within 24 hours are merged, and the office is notified. Use
+          this on every contact / enquiry form across all your sites, send UTM + GCLID fields, and
+          include an empty hidden <code className="bg-muted rounded px-1">website</code> honeypot
+          field. See the README for a curl example.
         </>
       ),
     },

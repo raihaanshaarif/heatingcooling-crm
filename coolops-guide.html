@@ -725,6 +725,15 @@ COMMIT;</code></pre>
   <li>Add a hidden, empty field called <code>website</code> to your form. Bots fill it in and are ignored.</li>
   <li>At most 10 enquiries per minute from one address are accepted, to stop spam floods.</li>
 </ul>
+<h3>Use this in every form</h3>
+<p>Apply this to <strong>all website enquiry forms</strong>: contact, quote request, book-a-service, callback and footer forms.</p>
+<ol>
+  <li>Send each form to <code>/api/leads/webhook</code> with the same <code>x-api-key</code>.</li>
+  <li>Always include <code>name</code> and at least one of <code>email</code> or <code>phone</code>.</li>
+  <li>Include hidden <code>website</code> as an empty field in every form.</li>
+  <li>Pass through <code>utm_source</code>, <code>utm_medium</code>, <code>utm_campaign</code> and <code>gclid</code> where available.</li>
+  <li>Set <code>site</code> so you can tell which website generated the lead.</li>
+</ol>
 <h3>More than one website</h3>
 <p>All your websites use the <strong>same address and the same key</strong>. You do not need anything new in CoolOps for each site.</p>
 <ol>
