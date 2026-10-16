@@ -102,7 +102,7 @@ export function InvoiceActions({
           title={`Email ${invoice.number} to the client?`}
           description={
             invoice.hasEmail
-              ? "They get a link to view and download the tax invoice."
+              ? "They get a link to view and download the invoice."
               : "This client has no email address."
           }
           confirmLabel="Send"

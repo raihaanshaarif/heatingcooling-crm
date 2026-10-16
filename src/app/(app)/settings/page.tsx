@@ -79,7 +79,7 @@ export default async function SettingsPage({
         <Card>
           <CardHeader>
             <CardTitle>Business details</CardTitle>
-            <CardDescription>Shown on quotes, tax invoices and emails.</CardDescription>
+            <CardDescription>Shown on quotes, invoices and emails.</CardDescription>
           </CardHeader>
           <CardContent>
             <BusinessSettingsForm settings={settings} />

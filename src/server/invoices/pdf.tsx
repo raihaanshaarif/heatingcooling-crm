@@ -72,7 +72,7 @@ export async function renderInvoicePdf(
 
   return renderToBuffer(
     <PdfDocument
-      kind={settings.gstRegistered ? "Tax Invoice" : "Invoice"}
+      kind="Invoice"
       business={business}
       number={invoice.number}
       meta={[

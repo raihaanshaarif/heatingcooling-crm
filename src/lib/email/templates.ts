@@ -12,8 +12,8 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<EmailTemplateKey, EmailTemplate> = 
     body: 'Hi {{clientName}},\n\nThanks for the opportunity to quote. Your quote {{number}} for "{{title}}" is ready ({{total}} inc GST).\n\nYou can view the options and accept online using the button below.',
   },
   invoiceSent: {
-    subject: "Tax invoice {{number}} from {{businessName}}",
-    body: "Hi {{clientName}},\n\nPlease find your tax invoice {{number}} for {{total}} inc GST. The balance of {{balance}} is due by {{dueDate}}.",
+    subject: "Invoice {{number}} from {{businessName}}",
+    body: "Hi {{clientName}},\n\nPlease find your invoice {{number}} for {{total}} inc GST. The balance of {{balance}} is due by {{dueDate}}.",
   },
   invoiceOverdue: {
     subject: "Reminder: invoice {{number}} is overdue",

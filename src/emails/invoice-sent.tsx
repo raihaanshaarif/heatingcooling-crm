@@ -15,10 +15,10 @@ export interface InvoiceSentEmailProps {
 export default function InvoiceSentEmail(props: InvoiceSentEmailProps) {
   const intro =
     props.body ??
-    `Hi ${props.clientName},\n\nPlease find your tax invoice ${props.invoiceNumber} for ${props.total} inc GST. The balance of ${props.balance} is due by ${props.dueDate}.`;
+    `Hi ${props.clientName},\n\nPlease find your invoice ${props.invoiceNumber} for ${props.total} inc GST. The balance of ${props.balance} is due by ${props.dueDate}.`;
   return (
     <EmailLayout
-      preview={`Tax invoice ${props.invoiceNumber} from ${props.business.businessName}`}
+      preview={`Invoice ${props.invoiceNumber} from ${props.business.businessName}`}
       business={props.business}
       paragraphs={[
         intro,

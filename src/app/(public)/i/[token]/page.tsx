@@ -34,7 +34,7 @@ export default async function PublicInvoicePage({
         <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1">
             <p className="text-muted-foreground text-sm">
-              {settings.gstRegistered ? "Tax invoice" : "Invoice"}
+              Invoice
             </p>
             <h1 className="flex items-center gap-2 text-2xl font-semibold">
               {invoice.number} <InvoiceStatusBadge status={invoice.status} />

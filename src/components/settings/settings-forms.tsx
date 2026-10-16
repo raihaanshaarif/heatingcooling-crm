@@ -64,7 +64,7 @@ export function BusinessSettingsForm({ settings }: { settings: BusinessSettings 
             name="abn"
             label="ABN"
             className="sm:col-span-2"
-            description="Printed on every tax invoice."
+            description="Printed on every invoice."
           />
           <TextField name="phone" label="Phone" type="tel" className="sm:col-span-2" />
           <TextField name="email" label="Email" type="email" className="sm:col-span-2" />
@@ -184,7 +184,7 @@ export function InvoicingSettingsForm({ settings }: { settings: BusinessSettings
         <SwitchField
           name="gstRegistered"
           label="Registered for GST"
-          description="Adds 10% GST to taxable lines and titles invoices “Tax Invoice”."
+          description="Adds 10% GST to taxable lines."
         />
         <div className="grid gap-4 sm:grid-cols-2">
           <SelectField

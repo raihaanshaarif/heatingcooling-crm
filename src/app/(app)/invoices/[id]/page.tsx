@@ -79,7 +79,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
         <div className="space-y-4 lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle>{settings.gstRegistered ? "Tax invoice" : "Invoice"}</CardTitle>
+              <CardTitle>Invoice</CardTitle>
             </CardHeader>
             <CardContent>
               <Table>

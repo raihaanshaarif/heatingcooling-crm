@@ -22,7 +22,7 @@ export default async function InvoicesPage() {
     <>
       <PageHeader
         title="Invoices"
-        description="Tax invoices, payments and credit notes."
+        description="Invoices, payments and credit notes."
         actions={
           can(user, "create", "invoices") && (
             <Button asChild>

@@ -220,7 +220,7 @@ export async function createInvoiceFromJob(input: z.input<typeof invoiceFromJobS
           const label = kind === "deposit" ? "Deposit" : "Progress claim";
           lines = [
             {
-              description: `${label} (${percent}%): ${job.number} ${job.title}`,
+              description: `${label} (${percent}%): ${job.number}`,
               quantity: 1,
               unitPrice: Math.round((base * percent) / 100),
               taxable: true,

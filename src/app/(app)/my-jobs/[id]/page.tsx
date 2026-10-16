@@ -21,6 +21,7 @@ import { JobLineItems } from "@/components/jobs/job-line-items";
 import { JobAttachments } from "@/components/jobs/job-attachments";
 import { JobCompletionForm } from "@/components/jobs/job-completion-form";
 import { JobNoteForm } from "@/components/jobs/job-note-form";
+import { MyJobEquipmentLinker } from "@/components/jobs/my-job-equipment-linker";
 import { SignaturePad } from "@/components/jobs/signature-pad";
 
 export const metadata: Metadata = { title: "Job" };
@@ -109,13 +110,20 @@ export default async function MyJobPage({ params }: { params: Promise<{ id: stri
             )}
           </CardContent>
         </Card>
-        {job.equipment.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Equipment</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              {job.equipment.map(({ equipment: e }) => (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
+            <CardTitle>Equipment</CardTitle>
+            {!locked && (
+              <MyJobEquipmentLinker
+                jobId={job.id}
+                propertyId={job.propertyId}
+                linkedEquipmentIds={job.equipment.map((e) => e.equipmentId)}
+              />
+            )}
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {job.equipment.length > 0 ? (
+              job.equipment.map(({ equipment: e }) => (
                 <div key={e.id} className="rounded-md border p-3">
                   <p className="font-medium">
                     {e.brand} {e.model}
@@ -128,10 +136,14 @@ export default async function MyJobPage({ params }: { params: Promise<{ id: stri
                     {e.serialNumber ? ` · S/N ${e.serialNumber}` : ""}
                   </p>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
+              ))
+            ) : (
+              <p className="text-muted-foreground">
+                No equipment linked yet. Use Link equipment to attach units serviced on site.
+              </p>
+            )}
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader>
             <CardTitle>Checklist</CardTitle>
